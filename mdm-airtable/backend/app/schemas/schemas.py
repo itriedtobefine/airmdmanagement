@@ -81,7 +81,7 @@ class RecordUpdate(BaseModel):
 class CellValueResponse(BaseModel):
     id: int
     column_id: int
-    value: Any
+    value: Optional[Any] = None
     
     class Config:
         from_attributes = True

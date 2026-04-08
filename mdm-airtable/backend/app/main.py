@@ -1,11 +1,12 @@
 from fastapi import FastAPI, UploadFile, File, Depends, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
+from sqlalchemy.orm import Session
 import csv
 import io
 import json
 
-from .db.database import init_db
+from .db.database import init_db, get_db
 from .routers import api
 
 app = FastAPI(title="MDM AirTable Clone", description="Master Data Management system with flexible tables and relationships")
@@ -47,14 +48,11 @@ def health_check():
 
 
 @app.post("/api/v1/tables/{table_id}/import-csv")
-async def import_csv_to_table(table_id: int, file: UploadFile = File(...)):
+async def import_csv_to_table(table_id: int, file: UploadFile = File(...), db: Session = Depends(get_db)):
     """Import CSV data into a table"""
-    from sqlalchemy.orm import Session
-    from ..db.database import get_db
     from ..services.data_service import RecordService, ColumnService
     from ..schemas.schemas import RecordCreate, CellValueInput
     
-    db = next(get_db())
     try:
         # Read CSV content
         content = await file.read()
@@ -104,8 +102,6 @@ async def import_csv_to_table(table_id: int, file: UploadFile = File(...)):
     except Exception as e:
         db.rollback()
         raise HTTPException(status_code=400, detail=f"CSV import failed: {str(e)}")
-    finally:
-        db.close()
 
 
 @app.get("/api/v1/tables/{table_id}/export-csv")

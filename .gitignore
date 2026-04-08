@@ -21,35 +21,16 @@ wheels/
 .installed.cfg
 *.egg
 
-# Virtual Environment
+# Virtual environments
 venv/
 ENV/
-env/
-.venv/
 env.bak/
-venv.bak/
+.venv/
 
-# FastAPI/Backend
-*.db
-*.db-journal
-
-# Node.js/JavaScript
-node_modules/
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-.pnp/
-.pnp.js
-.cache/
-.parcel-cache/
-
-# Vite
-dist/
-.temp/
-!.gitignore
-
-# Dependencies
-jspm_packages/
+# Environment variables
+.env
+.env.local
+.env.*
 
 # IDE
 .vscode/
@@ -57,21 +38,11 @@ jspm_packages/
 *.swp
 *.swo
 
-# Environment variables
-.env
-.env.local
-.env.*
-
 # Logs
-logs/
 *.log
 
-# OS generated files
-.DS_Store
-.DS_Store?
-._*
-.Spotlight-V100
-.Trashes
-ehthumbs.db
-Thumbs.db
+# Coverage
+.coverage
+coverage/
+htmlcov/
 ```
