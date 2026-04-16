@@ -1,0 +1,8 @@
+task_type,description,hours_per_month
+support_manual,"Поддержка ручного справочника",4
+support_external,"Поддержка справочника с внешней интеграцией",8
+support_registry,"Поддержка реестра",12
+support_mdm,"Поддержка MDM-решения",20
+support_rdm,"Поддержка решения НСИ",16
+support_api,"Поддержка API справочника",6
+support_complex,"Поддержка сложного справочника с валидацией",10

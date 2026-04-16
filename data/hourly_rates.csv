@@ -1,0 +1,9 @@
+role,description,hourly_rate
+developer,"Разработчик (Middle)",2500
+developer_senior,"Разработчик (Senior)",3500
+qa_engineer,"Инженер по тестированию",1800
+analyst,"Бизнес-аналитик",2200
+devops,"DevOps инженер",2800
+support_specialist,"Специалист технической поддержки",1500
+project_manager,"Менеджер проекта",2500
+data_architect,"Архитектор данных",4000

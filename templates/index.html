@@ -1,0 +1,449 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Оценка стоимости справочников</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 40px 20px;
+        }
+        
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+        }
+        
+        .header {
+            text-align: center;
+            color: white;
+            margin-bottom: 40px;
+        }
+        
+        .header h1 {
+            font-size: 2.5rem;
+            margin-bottom: 10px;
+        }
+        
+        .header p {
+            opacity: 0.9;
+            font-size: 1.1rem;
+        }
+        
+        .card {
+            background: white;
+            border-radius: 12px;
+            padding: 30px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+            margin-bottom: 20px;
+        }
+        
+        .form-group {
+            margin-bottom: 20px;
+        }
+        
+        label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+            color: #333;
+        }
+        
+        textarea {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 1rem;
+            font-family: inherit;
+            resize: vertical;
+            min-height: 120px;
+            transition: border-color 0.3s;
+        }
+        
+        textarea:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+        
+        .checkbox-group {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        input[type="checkbox"], input[type="number"] {
+            cursor: pointer;
+        }
+        
+        input[type="number"] {
+            padding: 8px 12px;
+            border: 2px solid #e0e0e0;
+            border-radius: 6px;
+            font-size: 1rem;
+            width: 120px;
+        }
+        
+        button {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 14px 30px;
+            font-size: 1.1rem;
+            font-weight: 600;
+            border-radius: 8px;
+            cursor: pointer;
+            width: 100%;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 20px rgba(102, 126, 234, 0.4);
+        }
+        
+        button:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+        
+        .result {
+            display: none;
+        }
+        
+        .result.show {
+            display: block;
+            animation: fadeIn 0.3s ease-in;
+        }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        
+        .result-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            padding-bottom: 20px;
+            border-bottom: 2px solid #f0f0f0;
+        }
+        
+        .cost-item {
+            text-align: center;
+            flex: 1;
+        }
+        
+        .cost-label {
+            font-size: 0.9rem;
+            color: #666;
+            margin-bottom: 5px;
+        }
+        
+        .cost-value {
+            font-size: 1.8rem;
+            font-weight: 700;
+            color: #667eea;
+        }
+        
+        .cost-value.total {
+            color: #764ba2;
+            font-size: 2.2rem;
+        }
+        
+        .section-title {
+            font-size: 1.2rem;
+            font-weight: 600;
+            color: #333;
+            margin: 25px 0 15px;
+            padding-bottom: 8px;
+            border-bottom: 2px solid #667eea;
+        }
+        
+        .task-list {
+            list-style: none;
+        }
+        
+        .task-list li {
+            padding: 10px 0;
+            border-bottom: 1px solid #f0f0f0;
+            display: flex;
+            justify-content: space-between;
+        }
+        
+        .task-list li:last-child {
+            border-bottom: none;
+        }
+        
+        .task-name {
+            color: #333;
+        }
+        
+        .task-hours {
+            font-weight: 600;
+            color: #667eea;
+        }
+        
+        .summary {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 8px;
+            white-space: pre-wrap;
+            font-family: 'Courier New', monospace;
+            font-size: 0.9rem;
+            line-height: 1.6;
+        }
+        
+        .error {
+            background: #fee;
+            border: 1px solid #fcc;
+            color: #c00;
+            padding: 15px;
+            border-radius: 8px;
+            margin-top: 20px;
+        }
+        
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #667eea;
+            font-size: 1.2rem;
+        }
+        
+        .spinner {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #667eea;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 20px;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        .detected-info {
+            background: #e8f4fd;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+        
+        .detected-info h4 {
+            color: #667eea;
+            margin-bottom: 10px;
+        }
+        
+        .tag {
+            display: inline-block;
+            background: #667eea;
+            color: white;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 0.85rem;
+            margin: 3px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>📊 Оценка стоимости справочников</h1>
+            <p>Система расчета экономической эффективности передачи разработки и поддержки справочников</p>
+        </div>
+        
+        <div class="card">
+            <form id="estimateForm">
+                <div class="form-group">
+                    <label for="description">Описание справочника / реестра:</label>
+                    <textarea 
+                        id="description" 
+                        name="description" 
+                        placeholder="Опишите планируемый справочник или реестр. Например: 'Разработка справочника ОКАТО с интеграцией получения данных из внешнего источника, с правилами валидации и формой редактирования'"
+                        required
+                    ></textarea>
+                </div>
+                
+                <div class="form-group">
+                    <div class="checkbox-group">
+                        <label for="customSupport">Часов на поддержку в месяц (если известно):</label>
+                        <input type="number" id="customSupport" name="customSupport" min="0" placeholder="авто">
+                    </div>
+                </div>
+                
+                <button type="submit" id="submitBtn">Рассчитать стоимость</button>
+            </form>
+            
+            <div id="loading" class="loading" style="display: none;">
+                <div class="spinner"></div>
+                <div>Анализ запроса и расчет...</div>
+            </div>
+            
+            <div id="error" class="error" style="display: none;"></div>
+            
+            <div id="result" class="result">
+                <div class="result-header">
+                    <div class="cost-item">
+                        <div class="cost-label">Разработка</div>
+                        <div class="cost-value" id="devCost">-</div>
+                    </div>
+                    <div class="cost-item">
+                        <div class="cost-label">Поддержка (год)</div>
+                        <div class="cost-value" id="supportCost">-</div>
+                    </div>
+                    <div class="cost-item">
+                        <div class="cost-label">Итого (1 год)</div>
+                        <div class="cost-value total" id="totalCost">-</div>
+                    </div>
+                </div>
+                
+                <div id="detectedInfo" class="detected-info">
+                    <h4>🔍 Распознанные компоненты:</h4>
+                    <div id="detectedTasks"></div>
+                    <div id="detectedTech" style="margin-top: 10px;"></div>
+                </div>
+                
+                <h3 class="section-title">Детализация разработки</h3>
+                <ul class="task-list" id="devTasks"></ul>
+                
+                <h3 class="section-title">Детализация поддержки</h3>
+                <ul class="task-list" id="supportTasks"></ul>
+                
+                <h3 class="section-title">Обоснование расчета</h3>
+                <div class="summary" id="summary"></div>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        function formatNumber(num) {
+            return num.toString().replace(/\B(?=(\d{3})+(?!\d))/g, " ") + " ₽";
+        }
+        
+        document.getElementById('estimateForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            const description = document.getElementById('description').value.trim();
+            const customSupport = document.getElementById('customSupport').value;
+            
+            if (!description) {
+                alert('Пожалуйста, введите описание справочника');
+                return;
+            }
+            
+            // Show loading
+            document.getElementById('loading').style.display = 'block';
+            document.getElementById('result').classList.remove('show');
+            document.getElementById('error').style.display = 'none';
+            document.getElementById('submitBtn').disabled = true;
+            
+            try {
+                const response = await fetch('/api/estimate', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        description: description,
+                        custom_support_hours: customSupport ? parseInt(customSupport) : null
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (!data.success) {
+                    document.getElementById('error').textContent = data.error;
+                    document.getElementById('error').style.display = 'block';
+                } else {
+                    // Populate results
+                    document.getElementById('devCost').textContent = formatNumber(data.development_cost);
+                    document.getElementById('supportCost').textContent = formatNumber(data.support_cost_yearly);
+                    document.getElementById('totalCost').textContent = formatNumber(data.total_first_year);
+                    
+                    // Detected tasks
+                    const tasksDiv = document.getElementById('detectedTasks');
+                    tasksDiv.innerHTML = '';
+                    if (data.detected_tasks && data.detected_tasks.length > 0) {
+                        data.detected_tasks.forEach(task => {
+                            const tag = document.createElement('span');
+                            tag.className = 'tag';
+                            tag.textContent = task;
+                            tasksDiv.appendChild(tag);
+                        });
+                    } else {
+                        tasksDiv.textContent = 'Не определено';
+                    }
+                    
+                    // Tech stack
+                    const techDiv = document.getElementById('detectedTech');
+                    techDiv.innerHTML = '';
+                    if (data.tech_stack && data.tech_stack.length > 0) {
+                        techDiv.innerHTML = '<strong>Технологии:</strong> ';
+                        data.tech_stack.forEach(tech => {
+                            const tag = document.createElement('span');
+                            tag.className = 'tag';
+                            tag.style.background = '#764ba2';
+                            tag.textContent = tech;
+                            techDiv.appendChild(tag);
+                        });
+                    }
+                    
+                    // Development tasks
+                    const devTasksList = document.getElementById('devTasks');
+                    devTasksList.innerHTML = '';
+                    if (data.development_breakdown && data.development_breakdown.tasks) {
+                        data.development_breakdown.tasks.forEach(task => {
+                            const li = document.createElement('li');
+                            li.innerHTML = `
+                                <span class="task-name">${task.type}${task.note ? ' (' + task.note + ')' : ''}</span>
+                                <span class="task-hours">${task.hours} ч.</span>
+                            `;
+                            devTasksList.appendChild(li);
+                        });
+                    }
+                    
+                    // Support tasks
+                    const supportTasksList = document.getElementById('supportTasks');
+                    supportTasksList.innerHTML = '';
+                    if (data.support_breakdown && data.support_breakdown.types) {
+                        data.support_breakdown.types.forEach(task => {
+                            const li = document.createElement('li');
+                            li.innerHTML = `
+                                <span class="task-name">${task.type}${task.note ? ' (' + task.note + ')' : ''}</span>
+                                <span class="task-hours">${task.hours_per_month} ч./мес.</span>
+                            `;
+                            supportTasksList.appendChild(li);
+                        });
+                    }
+                    
+                    // Summary
+                    document.getElementById('summary').textContent = data.summary;
+                    
+                    // Show result
+                    document.getElementById('result').classList.add('show');
+                }
+            } catch (err) {
+                document.getElementById('error').textContent = 'Ошибка подключения к серверу: ' + err.message;
+                document.getElementById('error').style.display = 'block';
+            } finally {
+                document.getElementById('loading').style.display = 'none';
+                document.getElementById('submitBtn').disabled = false;
+            }
+        });
+    </script>
+</body>
+</html>
