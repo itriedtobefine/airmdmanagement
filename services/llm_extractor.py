@@ -150,4 +150,14 @@ class ParameterExtractor:
         if raw_text.endswith("```"):
             raw_text = raw_text[:-3]
         
+        raw_text = raw_text.strip()
+        
+        # Find the first '{' and last '}' to extract valid JSON
+        # This handles cases where LLM adds extra text after JSON
+        start_idx = raw_text.find('{')
+        end_idx = raw_text.rfind('}')
+        
+        if start_idx != -1 and end_idx != -1 and start_idx < end_idx:
+            raw_text = raw_text[start_idx:end_idx + 1]
+        
         return raw_text.strip()

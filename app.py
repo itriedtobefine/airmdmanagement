@@ -183,19 +183,13 @@ async def health_check():
 @app.exception_handler(404)
 async def not_found_handler(request, exc):
     """Handle 404 errors."""
-    return ErrorResponse(
-        error="Resource not found",
-        error_code="NOT_FOUND",
-    ).model_dump()
+    return {"error": "Resource not found", "error_code": "NOT_FOUND"}
 
 
 @app.exception_handler(500)
 async def internal_error_handler(request, exc):
     """Handle 500 errors."""
-    return ErrorResponse(
-        error="Internal server error",
-        error_code="INTERNAL_ERROR",
-    ).model_dump()
+    return {"error": "Internal server error", "error_code": "INTERNAL_ERROR"}
 
 
 if __name__ == "__main__":
