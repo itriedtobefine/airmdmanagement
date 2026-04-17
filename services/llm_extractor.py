@@ -118,8 +118,10 @@ class ParameterExtractor:
             raw_output = response["choices"][0]["text"].strip()
             logger.debug(f"Raw LLM output: {raw_output}")
             
-            # Clean up potential markdown artifacts
+            # Clean up potential markdown artifacts and extra text
             raw_output = self._clean_json_output(raw_output)
+            
+            logger.debug(f"Cleaned LLM output: {raw_output}")
             
             # Parse JSON
             parsed_data = json.loads(raw_output)
@@ -142,6 +144,7 @@ class ParameterExtractor:
             
         except json.JSONDecodeError as e:
             logger.error(f"Invalid JSON from LLM: {e}")
+            logger.error(f"Raw output was: {raw_output}")
             raise ValueError(f"Failed to parse LLM response as JSON: {e}")
         except Exception as e:
             logger.error(f"Parameter extraction failed: {e}")
@@ -167,12 +170,31 @@ class ParameterExtractor:
         
         raw_text = raw_text.strip()
         
-        # Find the first '{' and last '}' to extract valid JSON
-        # This handles cases where LLM adds extra text after JSON
+        # Find the first '{' to start extracting JSON
         start_idx = raw_text.find('{')
-        end_idx = raw_text.rfind('}')
+        if start_idx == -1:
+            return raw_text
         
-        if start_idx != -1 and end_idx != -1 and start_idx < end_idx:
+        # Try to find matching closing brace by counting braces
+        # This handles cases where there are multiple JSON objects or extra text
+        brace_count = 0
+        end_idx = -1
+        
+        for i, char in enumerate(raw_text[start_idx:], start_idx):
+            if char == '{':
+                brace_count += 1
+            elif char == '}':
+                brace_count -= 1
+                if brace_count == 0:
+                    end_idx = i
+                    break
+        
+        if end_idx != -1:
             raw_text = raw_text[start_idx:end_idx + 1]
+        else:
+            # Fallback: just take from first '{' to last '}'
+            end_idx = raw_text.rfind('}')
+            if end_idx != -1 and start_idx < end_idx:
+                raw_text = raw_text[start_idx:end_idx + 1]
         
         return raw_text.strip()

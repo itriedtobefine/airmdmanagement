@@ -11,6 +11,8 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import HTMLResponse, FileResponse, JSONResponse
+from fastapi.exceptions import RequestValidationError
+from starlette.exceptions import HTTPException as StarletteHTTPException
 from pydantic import ValidationError
 
 from models.schemas import (
@@ -180,18 +182,33 @@ async def health_check():
     }
 
 
-@app.exception_handler(404)
-async def not_found_handler(request: Request, exc: HTTPException):
+@app.exception_handler(StarletteHTTPException)
+async def not_found_handler(request: Request, exc: StarletteHTTPException):
     """Handle 404 errors."""
+    if exc.status_code == 404:
+        return JSONResponse(
+            status_code=404,
+            content={"error": "Resource not found", "error_code": "NOT_FOUND"}
+        )
     return JSONResponse(
-        status_code=404,
-        content={"error": "Resource not found", "error_code": "NOT_FOUND"}
+        status_code=exc.status_code,
+        content={"error": str(exc.detail), "error_code": "HTTP_ERROR"}
+    )
+
+
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    """Handle validation errors."""
+    return JSONResponse(
+        status_code=422,
+        content={"error": "Validation error", "error_code": "VALIDATION_ERROR", "details": exc.errors()}
     )
 
 
 @app.exception_handler(500)
 async def internal_error_handler(request: Request, exc: Exception):
     """Handle 500 errors."""
+    logger.error(f"Internal server error: {exc}")
     return JSONResponse(
         status_code=500,
         content={"error": "Internal server error", "error_code": "INTERNAL_ERROR"}
