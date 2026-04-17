@@ -111,6 +111,10 @@ class ParameterExtractor:
                 echo=False,
             )
             
+            logger.info("===================")
+            logger.info(response)
+            logger.info("===================")
+            
             raw_output = response["choices"][0]["text"].strip()
             logger.debug(f"Raw LLM output: {raw_output}")
             
@@ -119,6 +123,17 @@ class ParameterExtractor:
             
             # Parse JSON
             parsed_data = json.loads(raw_output)
+            
+            # Handle case where LLM returns a list of objects - take the first one
+            if isinstance(parsed_data, list):
+                if len(parsed_data) > 0:
+                    parsed_data = parsed_data[0]
+                else:
+                    raise ValueError("LLM returned an empty list instead of a JSON object")
+            
+            # Validate that we have a dict
+            if not isinstance(parsed_data, dict):
+                raise ValueError(f"LLM returned unexpected type: {type(parsed_data)}")
             
             # Validate against Pydantic schema
             parameters = ExtractedParameters(**parsed_data)

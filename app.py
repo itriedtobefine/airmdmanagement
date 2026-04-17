@@ -8,9 +8,9 @@ import logging
 from pathlib import Path
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import HTMLResponse, FileResponse
+from fastapi.responses import HTMLResponse, FileResponse, JSONResponse
 from pydantic import ValidationError
 
 from models.schemas import (
@@ -181,15 +181,21 @@ async def health_check():
 
 
 @app.exception_handler(404)
-async def not_found_handler(request, exc):
+async def not_found_handler(request: Request, exc: HTTPException):
     """Handle 404 errors."""
-    return {"error": "Resource not found", "error_code": "NOT_FOUND"}
+    return JSONResponse(
+        status_code=404,
+        content={"error": "Resource not found", "error_code": "NOT_FOUND"}
+    )
 
 
 @app.exception_handler(500)
-async def internal_error_handler(request, exc):
+async def internal_error_handler(request: Request, exc: Exception):
     """Handle 500 errors."""
-    return {"error": "Internal server error", "error_code": "INTERNAL_ERROR"}
+    return JSONResponse(
+        status_code=500,
+        content={"error": "Internal server error", "error_code": "INTERNAL_ERROR"}
+    )
 
 
 if __name__ == "__main__":
