@@ -1,1 +1,24 @@
-(data/development_effort.csv is a data file, not a build artifact, dependency, or temp file - it's a legitimate project file that should be tracked in git)
+```
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Logs and temp files
+*.log
+*.tmp
+
+# Environment
+.env
+.env.local
+*.env.*
+
+# Editors
+.vscode/
+.idea/
+
+# Dependencies
+.venv/
+venv/
+```

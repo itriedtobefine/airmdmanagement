@@ -29,9 +29,10 @@ class ParameterExtractor:
 1. Отвечай ТОЛЬКО валидным JSON. Никакого текста до или после JSON. Никаких пояснений. Никакого markdown.
 2. Используй строго указанную схему JSON.
 3. Если описание не относится к справочникам/реестрам, установи task_type="unknown".
-4. ВНИМАТЕЛЬНО анализируй количество справочников - если пользователь указал "2 справочника", "два реестра" и т.д., создавай отдельный элемент в массиве registries для КАЖДОГО справочника с quantity=1.
-5. РАЗДЕЛЯЙ разные типы задач: если пользователь просит "разработать справочники И сделать первичную загрузку", создавай ОТДЕЛЬНЫЕ элементы в массиве registries - один для разработки справочников, другой для задачи data_migration с component=initial_load.
-6. Распознавай типы справочников:
+4. ВНИМАТЕЛЬНО анализируй количество справочников - если пользователь указал "20 справочников", "два реестра" и т.д., создавай отдельный элемент в массиве registries для КАЖДОГО справочника с quantity=1.
+5. РАЗДЕЛЯЙ разные типы задач: если пользователь просит "разработать справочники И сделать первичную загрузку", создавай ОТДЕЛЬНЫЕ элементы в массиве registries - один для разработки КАЖДОГО справочника, и ОТДЕЛЬНЫЙ элемент для первичной загрузки КАЖДОГО справочника.
+6. КРИТИЧЕСКИ ВАЖНО ДЛЯ ПЕРВИЧНОЙ ЗАГРУЗКИ: Если пользователь говорит "сделай первичную загрузку для N справочников" или "загрузи данные в эти N справочников", создавай N отдельных задач data_migration с component=initial_load (по одной на каждый справочник), а НЕ одну общую задачу.
+7. Распознавай типы справочников:
    - "внешний справочник", "справочник с внешним источником", "интеграция с внешним источником" -> task_type="external_integration"
    - "ручной справочник", "типовой ручной справочник", "справочник с ручным заполнением" -> task_type="manual_registry"
    - "реестр классификации" -> task_type="classification_registry"
@@ -68,11 +69,15 @@ class ParameterExtractor:
 
 Пример 6:
 Вход: "Разработай 2 внешних справочника и проведи первичную загрузку данных"
-Выход: {"registries": [{"task_type": "external_integration", "component": "api_integration", "registry_name": "Внешний справочник 1", "has_external_integration": true, "has_validation_rules": false, "estimated_records": null, "additional_components": [], "quantity": 1}, {"task_type": "external_integration", "component": "api_integration", "registry_name": "Внешний справочник 2", "has_external_integration": true, "has_validation_rules": false, "estimated_records": null, "additional_components": [], "quantity": 1}, {"task_type": "data_migration", "component": "initial_load", "registry_name": "Первичная загрузка данных", "has_external_integration": false, "has_validation_rules": false, "estimated_records": null, "additional_components": [], "quantity": 1}], "requires_support": true}
+Выход: {"registries": [{"task_type": "external_integration", "component": "api_integration", "registry_name": "Внешний справочник 1", "has_external_integration": true, "has_validation_rules": false, "estimated_records": null, "additional_components": [], "quantity": 1}, {"task_type": "external_integration", "component": "api_integration", "registry_name": "Внешний справочник 2", "has_external_integration": true, "has_validation_rules": false, "estimated_records": null, "additional_components": [], "quantity": 1}, {"task_type": "data_migration", "component": "initial_load", "registry_name": "Первичная загрузка данных для Внешний справочник 1", "has_external_integration": false, "has_validation_rules": false, "estimated_records": null, "additional_components": [], "quantity": 1}, {"task_type": "data_migration", "component": "initial_load", "registry_name": "Первичная загрузка данных для Внешний справочник 2", "has_external_integration": false, "has_validation_rules": false, "estimated_records": null, "additional_components": [], "quantity": 1}], "requires_support": true}
 
 Пример 7:
 Вход: "Разработай 2 типовых ручных справочника и сделай первоначальную загрузку данных"
-Выход: {"registries": [{"task_type": "manual_registry", "component": "basic_structure", "registry_name": "Ручной справочник 1", "has_external_integration": false, "has_validation_rules": false, "estimated_records": null, "additional_components": [], "quantity": 1}, {"task_type": "manual_registry", "component": "basic_structure", "registry_name": "Ручной справочник 2", "has_external_integration": false, "has_validation_rules": false, "estimated_records": null, "additional_components": [], "quantity": 1}, {"task_type": "data_migration", "component": "initial_load", "registry_name": "Первоначальная загрузка данных", "has_external_integration": false, "has_validation_rules": false, "estimated_records": null, "additional_components": [], "quantity": 1}], "requires_support": true}"""
+Выход: {"registries": [{"task_type": "manual_registry", "component": "basic_structure", "registry_name": "Ручной справочник 1", "has_external_integration": false, "has_validation_rules": false, "estimated_records": null, "additional_components": [], "quantity": 1}, {"task_type": "manual_registry", "component": "basic_structure", "registry_name": "Ручной справочник 2", "has_external_integration": false, "has_validation_rules": false, "estimated_records": null, "additional_components": [], "quantity": 1}, {"task_type": "data_migration", "component": "initial_load", "registry_name": "Первоначальная загрузка данных для Ручной справочник 1", "has_external_integration": false, "has_validation_rules": false, "estimated_records": null, "additional_components": [], "quantity": 1}, {"task_type": "data_migration", "component": "initial_load", "registry_name": "Первоначальная загрузка данных для Ручной справочник 2", "has_external_integration": false, "has_validation_rules": false, "estimated_records": null, "additional_components": [], "quantity": 1}], "requires_support": true}
+
+Пример 8:
+Вход: "Разработай 3 ручных справочника и сделай первичную загрузку для каждого из них"
+Выход: {"registries": [{"task_type": "manual_registry", "component": "basic_structure", "registry_name": "Ручной справочник 1", "has_external_integration": false, "has_validation_rules": false, "estimated_records": null, "additional_components": [], "quantity": 1}, {"task_type": "manual_registry", "component": "basic_structure", "registry_name": "Ручной справочник 2", "has_external_integration": false, "has_validation_rules": false, "estimated_records": null, "additional_components": [], "quantity": 1}, {"task_type": "manual_registry", "component": "basic_structure", "registry_name": "Ручной справочник 3", "has_external_integration": false, "has_validation_rules": false, "estimated_records": null, "additional_components": [], "quantity": 1}, {"task_type": "data_migration", "component": "initial_load", "registry_name": "Первичная загрузка данных для Ручной справочник 1", "has_external_integration": false, "has_validation_rules": false, "estimated_records": null, "additional_components": [], "quantity": 1}, {"task_type": "data_migration", "component": "initial_load", "registry_name": "Первичная загрузка данных для Ручной справочник 2", "has_external_integration": false, "has_validation_rules": false, "estimated_records": null, "additional_components": [], "quantity": 1}, {"task_type": "data_migration", "component": "initial_load", "registry_name": "Первичная загрузка данных для Ручной справочник 3", "has_external_integration": false, "has_validation_rules": false, "estimated_records": null, "additional_components": [], "quantity": 1}], "requires_support": true}"""
 
     def __init__(self, model_path: Path):
         """
@@ -94,7 +99,7 @@ class ParameterExtractor:
         try:
             self.llm = Llama(
                 model_path=str(self.model_path),
-                n_ctx=2048,
+                n_ctx=8192,  # Increased from 2048 to handle large requests with many registries
                 n_threads=4,
                 verbose=False,
             )
