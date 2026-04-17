@@ -1,5 +1,5 @@
 task_type,component,description,effort_hours
-manual_registry,basic_structure,Ручной справочник с базовой структурой (поля: код, наименование),4
+manual_registry,basic_structure,"Ручной справочник с базовой структурой (поля: код, наименование)",4
 manual_registry,validation_rules,Ручной справочник с типовыми правилами валидации,6
 manual_registry,advanced_validation,Ручной справочник со сложными правилами валидации,12
 external_integration,read_only,Интеграция с внешним источником (только чтение),8
