@@ -1,0 +1,25 @@
+task_type,component,description,effort_hours
+manual_registry,basic_structure,Ручной справочник с базовой структурой (поля: код, наименование),4
+manual_registry,validation_rules,Ручной справочник с типовыми правилами валидации,6
+manual_registry,advanced_validation,Ручной справочник со сложными правилами валидации,12
+external_integration,read_only,Интеграция с внешним источником (только чтение),8
+external_integration,sync_basic,Синхронизация с внешним источником (базовая),10
+external_integration,sync_advanced,Синхронизация с внешним источником (с трансформацией),16
+external_integration,api_integration,Разработка справочника с интеграцией получения данных из внешнего источника через API,10
+classification_registry,simple,Реестр классификации с простыми правилами,20
+classification_registry,complex,Реестр классификации данных со сложными правилами валидации,60
+classification_registry,hierarchical,Иерархический справочник с многоуровневой структурой,35
+reference_data,standard,Стандартный справочник нормативно-справочной информации,15
+reference_data,with_versioning,Справочник с поддержкой версионирования,25
+reference_data,with_approval_workflow,Справочник с рабочим процессом согласования,30
+master_data,basic,Базовый мастер-данных объект,40
+master_data,with_golden_record,Мастер-данные с золотой записью,50
+master_data,with_matching,Мастер-данные с функцией сопоставления,65
+ui_component,grid_view,Компонент табличного представления,8
+ui_component,search_filter,Поиск и фильтрация записей,6
+ui_component,bulk_operations,Массовые операции (загрузка/выгрузка),10
+ui_component,audit_log,Журнал аудита изменений,12
+data_migration,initial_load,Первичная загрузка данных,8
+data_migration,transformation,Трансформация и очистка данных,15
+documentation,technical,Техническая документация,4
+documentation,user_guide,Руководство пользователя,3

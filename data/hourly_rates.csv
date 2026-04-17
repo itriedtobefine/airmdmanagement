@@ -1,0 +1,6 @@
+role,hourly_rate_rub,description
+developer,3500.00,Разработчик (Backend/Frontend)
+tester,2500.00,Инженер по тестированию
+analyst,3000.00,Системный аналитик
+admin,2000.00,Администратор/DevOps
+support,2000.00,Специалист поддержки

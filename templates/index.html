@@ -1,0 +1,439 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Оценка стоимости разработки справочников</title>
+    
+    <!-- Ant Design CSS via CDN -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/antd/5.12.5/reset.min.css">
+    
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: #f0f2f5;
+            min-height: 100vh;
+            padding: 40px 20px;
+        }
+        
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+        }
+        
+        .header {
+            text-align: center;
+            margin-bottom: 40px;
+        }
+        
+        .header h1 {
+            color: #1890ff;
+            font-size: 32px;
+            font-weight: 600;
+            margin-bottom: 8px;
+        }
+        
+        .header p {
+            color: #666;
+            font-size: 14px;
+        }
+        
+        .card {
+            background: #fff;
+            border-radius: 8px;
+            box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+            padding: 24px;
+            margin-bottom: 24px;
+        }
+        
+        .form-label {
+            display: block;
+            font-size: 14px;
+            font-weight: 500;
+            color: #333;
+            margin-bottom: 8px;
+        }
+        
+        .textarea {
+            width: 100%;
+            min-height: 200px;
+            padding: 12px;
+            border: 1px solid #d9d9d9;
+            border-radius: 6px;
+            font-size: 14px;
+            resize: vertical;
+            transition: border-color 0.3s;
+        }
+        
+        .textarea:focus {
+            outline: none;
+            border-color: #40a9ff;
+            box-shadow: 0 0 0 2px rgba(24, 144, 255, 0.2);
+        }
+        
+        .button {
+            display: inline-block;
+            background: #1890ff;
+            color: #fff;
+            border: none;
+            border-radius: 6px;
+            padding: 12px 32px;
+            font-size: 14px;
+            cursor: pointer;
+            transition: all 0.3s;
+            margin-top: 16px;
+        }
+        
+        .button:hover {
+            background: #40a9ff;
+        }
+        
+        .button:disabled {
+            background: #d9d9d9;
+            cursor: not-allowed;
+        }
+        
+        .result-section {
+            display: none;
+        }
+        
+        .result-section.visible {
+            display: block;
+        }
+        
+        .result-header {
+            font-size: 18px;
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 16px;
+            padding-bottom: 12px;
+            border-bottom: 1px solid #f0f0f0;
+        }
+        
+        .cost-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 16px;
+            margin-bottom: 24px;
+        }
+        
+        .cost-item {
+            background: #fafafa;
+            border-radius: 6px;
+            padding: 16px;
+            text-align: center;
+        }
+        
+        .cost-label {
+            font-size: 13px;
+            color: #666;
+            margin-bottom: 8px;
+        }
+        
+        .cost-value {
+            font-size: 24px;
+            font-weight: 600;
+            color: #1890ff;
+        }
+        
+        .cost-sublabel {
+            font-size: 12px;
+            color: #999;
+            margin-top: 4px;
+        }
+        
+        .breakdown-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 16px;
+        }
+        
+        .breakdown-table th,
+        .breakdown-table td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid #f0f0f0;
+        }
+        
+        .breakdown-table th {
+            background: #fafafa;
+            font-weight: 500;
+            font-size: 13px;
+            color: #333;
+        }
+        
+        .breakdown-table td {
+            font-size: 13px;
+            color: #666;
+        }
+        
+        .summary-box {
+            background: #e6f7ff;
+            border: 1px solid #91d5ff;
+            border-radius: 6px;
+            padding: 16px;
+            margin-top: 24px;
+        }
+        
+        .summary-title {
+            font-size: 14px;
+            font-weight: 600;
+            color: #0050b3;
+            margin-bottom: 8px;
+        }
+        
+        .summary-text {
+            font-size: 13px;
+            color: #333;
+            line-height: 1.6;
+        }
+        
+        .error-box {
+            background: #fff1f0;
+            border: 1px solid #ffa39e;
+            border-radius: 6px;
+            padding: 16px;
+            margin-top: 16px;
+        }
+        
+        .error-text {
+            color: #cf1322;
+            font-size: 14px;
+        }
+        
+        .loading {
+            display: inline-block;
+            width: 16px;
+            height: 16px;
+            border: 2px solid #fff;
+            border-radius: 50%;
+            border-top-color: transparent;
+            animation: spin 0.8s linear infinite;
+            margin-right: 8px;
+            vertical-align: middle;
+        }
+        
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        
+        .hidden {
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Оценка стоимости разработки справочников</h1>
+            <p>Reference Data Management & Master Data Management Cost Calculator</p>
+        </div>
+        
+        <div class="card">
+            <label class="form-label" for="description">
+                Описание планируемого справочника или реестра
+            </label>
+            <textarea 
+                id="description" 
+                class="textarea" 
+                placeholder="Опишите ваш проект. Например: &#10;- Разработка ручного справочника ОКАТО с базовыми полями&#10;- Реестр классификации данных со сложными правилами валидации и интеграцией через API&#10;- Мастер-данные контрагентов с золотой записью и поддержкой"
+            ></textarea>
+            
+            <button id="calculateBtn" class="button" onclick="calculateCost()">
+                Рассчитать стоимость
+            </button>
+            
+            <div id="errorBox" class="error-box hidden">
+                <p id="errorText" class="error-text"></p>
+            </div>
+        </div>
+        
+        <div id="resultSection" class="card result-section">
+            <div class="result-header">Результаты расчёта</div>
+            
+            <div class="cost-grid">
+                <div class="cost-item">
+                    <div class="cost-label">Стоимость разработки</div>
+                    <div id="devCost" class="cost-value">0 ₽</div>
+                    <div id="devHours" class="cost-sublabel">0 часов</div>
+                </div>
+                
+                <div class="cost-item">
+                    <div class="cost-label">Годовая поддержка</div>
+                    <div id="supportCost" class="cost-value">0 ₽</div>
+                    <div id="supportHours" class="cost-sublabel">0 часов/год</div>
+                </div>
+            </div>
+            
+            <div id="breakdownSection">
+                <h3 style="font-size: 16px; margin-bottom: 12px; color: #333;">Детализация разработки</h3>
+                <table class="breakdown-table">
+                    <thead>
+                        <tr>
+                            <th>Компонент</th>
+                            <th>Часы</th>
+                            <th>Ставка (₽/ч)</th>
+                            <th>Сумма (₽)</th>
+                        </tr>
+                    </thead>
+                    <tbody id="devBreakdownBody">
+                    </tbody>
+                </table>
+            </div>
+            
+            <div id="supportBreakdownSection" class="hidden" style="margin-top: 24px;">
+                <h3 style="font-size: 16px; margin-bottom: 12px; color: #333;">Детализация поддержки</h3>
+                <table class="breakdown-table">
+                    <thead>
+                        <tr>
+                            <th>Компонент</th>
+                            <th>Часы/год</th>
+                            <th>Ставка (₽/ч)</th>
+                            <th>Сумма (₽/год)</th>
+                        </tr>
+                    </thead>
+                    <tbody id="supportBreakdownBody">
+                    </tbody>
+                </table>
+            </div>
+            
+            <div class="summary-box">
+                <div class="summary-title">Обоснование результата</div>
+                <div id="summaryText" class="summary-text"></div>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        function formatCurrency(value) {
+            return new Intl.NumberFormat('ru-RU', {
+                style: 'currency',
+                currency: 'RUB',
+                minimumFractionDigits: 0,
+                maximumFractionDigits: 0
+            }).format(value);
+        }
+        
+        function formatNumber(value, decimals = 1) {
+            return new Intl.NumberFormat('ru-RU', {
+                minimumFractionDigits: decimals,
+                maximumFractionDigits: decimals
+            }).format(value);
+        }
+        
+        async function calculateCost() {
+            const description = document.getElementById('description').value.trim();
+            const errorBox = document.getElementById('errorBox');
+            const errorText = document.getElementById('errorText');
+            const resultSection = document.getElementById('resultSection');
+            const calculateBtn = document.getElementById('calculateBtn');
+            
+            // Reset state
+            errorBox.classList.add('hidden');
+            resultSection.classList.remove('visible');
+            
+            // Validate input
+            if (!description || description.length < 10) {
+                errorText.textContent = 'Пожалуйста, введите подробное описание проекта (минимум 10 символов).';
+                errorBox.classList.remove('hidden');
+                return;
+            }
+            
+            // Show loading state
+            calculateBtn.disabled = true;
+            calculateBtn.innerHTML = '<span class="loading"></span>Расчёт...';
+            
+            try {
+                const response = await fetch('/api/calculate', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ description })
+                });
+                
+                const data = await response.json();
+                
+                if (!response.ok) {
+                    throw new Error(data.detail || 'Ошибка при расчёте');
+                }
+                
+                if (!data.success) {
+                    throw new Error(data.error_message || 'Расчёт не выполнен');
+                }
+                
+                // Display results
+                document.getElementById('devCost').textContent = formatCurrency(data.development_total_cost_rub);
+                document.getElementById('devHours').textContent = formatNumber(data.development_total_hours, 1) + ' часов';
+                
+                document.getElementById('supportCost').textContent = formatCurrency(data.support_total_cost_per_year_rub);
+                document.getElementById('supportHours').textContent = formatNumber(data.support_total_hours_per_year, 1) + ' часов/год';
+                
+                // Development breakdown
+                const devBreakdownBody = document.getElementById('devBreakdownBody');
+                devBreakdownBody.innerHTML = '';
+                
+                if (data.development_breakdown && data.development_breakdown.length > 0) {
+                    data.development_breakdown.forEach(item => {
+                        const row = document.createElement('tr');
+                        row.innerHTML = `
+                            <td>${item.component}</td>
+                            <td>${formatNumber(item.effort_hours, 1)}</td>
+                            <td>${formatNumber(item.rate_rub, 0)}</td>
+                            <td>${formatCurrency(item.cost_rub)}</td>
+                        `;
+                        devBreakdownBody.appendChild(row);
+                    });
+                }
+                
+                // Support breakdown
+                const supportBreakdownSection = document.getElementById('supportBreakdownSection');
+                const supportBreakdownBody = document.getElementById('supportBreakdownBody');
+                supportBreakdownBody.innerHTML = '';
+                
+                if (data.support_breakdown && data.support_breakdown.length > 0) {
+                    supportBreakdownSection.classList.remove('hidden');
+                    data.support_breakdown.forEach(item => {
+                        const row = document.createElement('tr');
+                        row.innerHTML = `
+                            <td>${item.component}</td>
+                            <td>${formatNumber(item.effort_hours, 1)}</td>
+                            <td>${formatNumber(item.rate_rub, 0)}</td>
+                            <td>${formatCurrency(item.cost_rub)}</td>
+                        `;
+                        supportBreakdownBody.appendChild(row);
+                    });
+                } else {
+                    supportBreakdownSection.classList.add('hidden');
+                }
+                
+                // Summary
+                document.getElementById('summaryText').textContent = data.summary;
+                
+                // Show result section
+                resultSection.classList.add('visible');
+                
+            } catch (error) {
+                errorText.textContent = error.message;
+                errorBox.classList.remove('hidden');
+            } finally {
+                calculateBtn.disabled = false;
+                calculateBtn.textContent = 'Рассчитать стоимость';
+            }
+        }
+        
+        // Allow Ctrl+Enter to submit
+        document.getElementById('description').addEventListener('keydown', function(e) {
+            if (e.ctrlKey && e.key === 'Enter') {
+                calculateCost();
+            }
+        });
+    </script>
+</body>
+</html>
