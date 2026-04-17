@@ -50,8 +50,10 @@ class CostCalculator:
         
         logger.info("CostCalculator initialized with CSV tables.")
     
-    def _round_decimal(self, value: Decimal) -> float:
+    def _round_decimal(self, value) -> float:
         """Round Decimal to 2 decimal places using ROUND_HALF_UP."""
+        if not isinstance(value, Decimal):
+            value = Decimal(str(value))
         return float(value.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP))
     
     def _lookup_development_effort(
