@@ -93,8 +93,8 @@ class CostCalculator:
         matched = self.hourly_rates_df[mask]
         
         if matched.empty:
-            # Default to developer rate
-            return Decimal("3500.00")
+            # Return None to signal missing data - caller should handle error
+            return None
         
         rate = matched.iloc[0]["hourly_rate_rub"]
         return Decimal(str(rate))
@@ -116,25 +116,20 @@ class CostCalculator:
         support_breakdown: List[CostBreakdownItem] = []
         components_included: List[str] = []
         
-        # Main task development effort
+        # Main task development effort - MUST find in CSV, no hardcoded defaults
         main_effort = self._lookup_development_effort(
             registry.task_type.value, registry.component.value
         )
         
         if main_effort is None:
-            # Use default effort based on task type
-            default_efforts = {
-                "manual_registry": Decimal("6"),
-                "external_integration": Decimal("19"),
-                "classification_registry": Decimal("30"),
-                "reference_data": Decimal("15"),
-                "master_data": Decimal("45"),
-                "ui_component": Decimal("8"),
-                "data_migration": Decimal("10"),
-                "documentation": Decimal("4"),
-            }
-            main_effort = default_efforts.get(registry.task_type.value, Decimal("10"))
-            logger.warning(f"Using default effort for {registry.task_type.value}")
+            logger.error(
+                f"Development effort not found in CSV for task_type={registry.task_type.value}, "
+                f"component={registry.component.value}. Stopping calculation."
+            )
+            raise ValueError(
+                f"Не найдены нормативы трудозатрат для задачи типа '{registry.task_type.value}' "
+                f"с компонентом '{registry.component.value}'. Проверьте таблицу development_effort.csv"
+            )
         
         # Multiply by quantity
         total_main_effort = main_effort * registry.quantity
@@ -154,13 +149,20 @@ class CostCalculator:
         )
         components_included.append(component_name)
         
-        # External integration adjustment
+        # External integration adjustment - only if has_external_integration flag is set
+        # This is an ADDITIONAL component that should be looked up from CSV
         if registry.has_external_integration:
             integration_effort = self._lookup_development_effort(
                 "external_integration", "api_integration"
             )
             if integration_effort is None:
-                integration_effort = Decimal("10")
+                logger.error(
+                    f"Integration effort not found in CSV. Stopping calculation."
+                )
+                raise ValueError(
+                    f"Не найдены нормативы трудозатрат для внешней интеграции (api_integration). "
+                    f"Проверьте таблицу development_effort.csv"
+                )
             
             # Multiply by quantity
             total_integration_effort = integration_effort * registry.quantity
@@ -180,13 +182,19 @@ class CostCalculator:
             )
             components_included.append(integration_component)
         
-        # Validation rules adjustment
+        # Validation rules adjustment - only if has_validation_rules flag is set
         if registry.has_validation_rules:
             validation_effort = self._lookup_development_effort(
                 "manual_registry", "validation_rules"
             )
             if validation_effort is None:
-                validation_effort = Decimal("6")
+                logger.error(
+                    f"Validation effort not found in CSV. Stopping calculation."
+                )
+                raise ValueError(
+                    f"Не найдены нормативы трудозатрат для правил валидации. "
+                    f"Проверьте таблицу development_effort.csv"
+                )
             
             # Multiply by quantity
             total_validation_effort = validation_effort * registry.quantity
@@ -206,7 +214,7 @@ class CostCalculator:
             )
             components_included.append(validation_component)
         
-        # Additional components
+        # Additional components - look up each from CSV
         additional_component_mapping = {
             "audit_log": ("ui_component", "audit_log"),
             "bulk_operations": ("ui_component", "bulk_operations"),
@@ -219,24 +227,32 @@ class CostCalculator:
                 task_t, comp = additional_component_mapping[add_component]
                 add_effort = self._lookup_development_effort(task_t, comp)
                 
-                if add_effort is not None:
-                    # Multiply by quantity
-                    total_add_effort = add_effort * registry.quantity
-                    add_cost = total_add_effort * dev_rate
-                    
-                    add_comp_name = add_component
-                    if registry.quantity > 1:
-                        add_comp_name += f" (x{registry.quantity})"
-                    
-                    development_breakdown.append(
-                        CostBreakdownItem(
-                            component=add_comp_name,
-                            effort_hours=self._round_decimal(total_add_effort),
-                            rate_rub=self._round_decimal(dev_rate),
-                            cost_rub=self._round_decimal(add_cost),
-                        )
+                if add_effort is None:
+                    logger.error(
+                        f"Additional component '{add_component}' not found in CSV. Stopping calculation."
                     )
-                    components_included.append(add_comp_name)
+                    raise ValueError(
+                        f"Не найдены нормативы трудозатрат для дополнительного компонента '{add_component}'. "
+                        f"Проверьте таблицу development_effort.csv"
+                    )
+                
+                # Multiply by quantity
+                total_add_effort = add_effort * registry.quantity
+                add_cost = total_add_effort * dev_rate
+                
+                add_comp_name = add_component
+                if registry.quantity > 1:
+                    add_comp_name += f" (x{registry.quantity})"
+                
+                development_breakdown.append(
+                    CostBreakdownItem(
+                        component=add_comp_name,
+                        effort_hours=self._round_decimal(total_add_effort),
+                        rate_rub=self._round_decimal(dev_rate),
+                        cost_rub=self._round_decimal(add_cost),
+                    )
+                )
+                components_included.append(add_comp_name)
         
         # Support calculation (only if explicitly requested)
         if requires_support:
@@ -245,22 +261,22 @@ class CostCalculator:
             )
             
             if support_effort is None:
-                # Default: external integrations require 2 hours/week if manual,
-                # manual registries require 0.1 hours/week for infrastructure
-                if registry.task_type == TaskType.EXTERNAL_INTEGRATION:
-                    # If this were manual, it would take 2 hours/week to fill
-                    support_effort = Decimal("2")
-                else:
-                    # Infrastructure overhead for manual registries
-                    support_effort = Decimal("0.1")
-            else:
-                # Override with business logic from requirements:
-                # - External integration: 2 hours/week (regardless of CSV value)
-                # - Manual registry: 0.1 hours/week for infrastructure only
-                if registry.task_type == TaskType.EXTERNAL_INTEGRATION:
-                    support_effort = Decimal("2")
-                elif registry.task_type == TaskType.MANUAL_REGISTRY:
-                    support_effort = Decimal("0.1")
+                logger.error(
+                    f"Support effort not found in CSV for task_type={registry.task_type.value}, "
+                    f"component={registry.component.value}. Stopping calculation."
+                )
+                raise ValueError(
+                    f"Не найдены нормативы поддержки для задачи типа '{registry.task_type.value}' "
+                    f"с компонентом '{registry.component.value}'. Проверьте таблицу support_effort.csv"
+                )
+            
+            # Apply business logic overrides from requirements:
+            # - External integration: 2 hours/week (regardless of CSV value)
+            # - Manual registry: 0.1 hours/week for infrastructure only
+            if registry.task_type == TaskType.EXTERNAL_INTEGRATION:
+                support_effort = Decimal("2")
+            elif registry.task_type == TaskType.MANUAL_REGISTRY:
+                support_effort = Decimal("0.1")
             
             # Multiply by quantity and by 52 weeks for annual
             annual_support_effort = support_effort * registry.quantity * Decimal("52")
@@ -315,8 +331,22 @@ class CostCalculator:
         all_support_breakdown: List[CostBreakdownItem] = []
         all_components: List[str] = []
         
+        # Get hourly rates - MUST find in CSV, no hardcoded defaults
         dev_rate = self._get_hourly_rate("developer")
+        if dev_rate is None:
+            logger.error("Developer hourly rate not found in CSV. Stopping calculation.")
+            raise ValueError(
+                "Не найдена часовая ставка для разработчика (developer). "
+                "Проверьте таблицу hourly_rates.csv"
+            )
+        
         support_rate = self._get_hourly_rate("support")
+        if support_rate is None:
+            logger.error("Support hourly rate not found in CSV. Stopping calculation.")
+            raise ValueError(
+                "Не найдена часовая ставка для специалиста поддержки (support). "
+                "Проверьте таблицу hourly_rates.csv"
+            )
         
         # Process each registry
         for idx, registry in enumerate(params.registries):

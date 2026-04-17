@@ -25,17 +25,20 @@ class ParameterExtractor:
     SYSTEM_PROMPT = """Ты — система извлечения параметров для оценки стоимости разработки справочников и реестров в сфере Reference Data Management и Master Data Management.
 Твоя задача — анализировать текстовое описание и извлекать структурированные параметры в формате JSON.
 
-ВАЖНО:
-1. Отвечай ТОЛЬКО валидным JSON без markdown, без пояснений, без дополнительного текста.
+КРИТИЧЕСКИ ВАЖНО:
+1. Отвечай ТОЛЬКО валидным JSON. Никакого текста до или после JSON. Никаких пояснений. Никакого markdown.
 2. Используй строго указанную схему JSON.
 3. Если описание не относится к справочникам/реестрам, установи task_type="unknown".
 4. ВНИМАТЕЛЬНО анализируй количество справочников - если пользователь указал "2 справочника", "два реестра" и т.д., создавай отдельный элемент в массиве registries для КАЖДОГО справочника с quantity=1.
-5. Распознавай типы справочников:
+5. РАЗДЕЛЯЙ разные типы задач: если пользователь просит "разработать справочники И сделать первичную загрузку", создавай ОТДЕЛЬНЫЕ элементы в массиве registries - один для разработки справочников, другой для задачи data_migration с component=initial_load.
+6. Распознавай типы справочников:
    - "внешний справочник", "справочник с внешним источником", "интеграция с внешним источником" -> task_type="external_integration"
    - "ручной справочник", "типовой ручной справочник", "справочник с ручным заполнением" -> task_type="manual_registry"
    - "реестр классификации" -> task_type="classification_registry"
    - "мастер-данные" -> task_type="master_data"
    - "нормативно-справочная информация" -> task_type="reference_data"
+   - "первичная загрузка", "загрузка данных", "импорт данных" -> task_type="data_migration", component="initial_load"
+   - "трансформация данных", "очистка данных" -> task_type="data_migration", component="transformation"
 
 Доступные значения:
 - task_type: manual_registry, external_integration, classification_registry, reference_data, master_data, ui_component, data_migration, documentation
@@ -61,7 +64,15 @@ class ParameterExtractor:
 
 Пример 5:
 Вход: "Создать интернет-магазин с корзиной и оплатой."
-Выход: {"registries": [{"task_type": "unknown", "component": "unknown", "registry_name": "Не применимо", "has_external_integration": false, "has_validation_rules": false, "estimated_records": null, "additional_components": [], "quantity": 1}], "requires_support": false}"""
+Выход: {"registries": [{"task_type": "unknown", "component": "unknown", "registry_name": "Не применимо", "has_external_integration": false, "has_validation_rules": false, "estimated_records": null, "additional_components": [], "quantity": 1}], "requires_support": false}
+
+Пример 6:
+Вход: "Разработай 2 внешних справочника и проведи первичную загрузку данных"
+Выход: {"registries": [{"task_type": "external_integration", "component": "api_integration", "registry_name": "Внешний справочник 1", "has_external_integration": true, "has_validation_rules": false, "estimated_records": null, "additional_components": [], "quantity": 1}, {"task_type": "external_integration", "component": "api_integration", "registry_name": "Внешний справочник 2", "has_external_integration": true, "has_validation_rules": false, "estimated_records": null, "additional_components": [], "quantity": 1}, {"task_type": "data_migration", "component": "initial_load", "registry_name": "Первичная загрузка данных", "has_external_integration": false, "has_validation_rules": false, "estimated_records": null, "additional_components": [], "quantity": 1}], "requires_support": true}
+
+Пример 7:
+Вход: "Разработай 2 типовых ручных справочника и сделай первоначальную загрузку данных"
+Выход: {"registries": [{"task_type": "manual_registry", "component": "basic_structure", "registry_name": "Ручной справочник 1", "has_external_integration": false, "has_validation_rules": false, "estimated_records": null, "additional_components": [], "quantity": 1}, {"task_type": "manual_registry", "component": "basic_structure", "registry_name": "Ручной справочник 2", "has_external_integration": false, "has_validation_rules": false, "estimated_records": null, "additional_components": [], "quantity": 1}, {"task_type": "data_migration", "component": "initial_load", "registry_name": "Первоначальная загрузка данных", "has_external_integration": false, "has_validation_rules": false, "estimated_records": null, "additional_components": [], "quantity": 1}], "requires_support": true}"""
 
     def __init__(self, model_path: Path):
         """
@@ -172,6 +183,7 @@ class ParameterExtractor:
     def _clean_json_output(self, raw_text: str) -> str:
         """
         Clean potential markdown or extra formatting from LLM output.
+        Uses robust JSON extraction by finding balanced braces.
         
         Args:
             raw_text: Raw text from LLM
@@ -189,12 +201,48 @@ class ParameterExtractor:
         
         raw_text = raw_text.strip()
         
-        # Find the first '{' and last '}' to extract valid JSON
-        # This handles cases where LLM adds extra text after JSON
+        # Find the first '{' to start JSON
         start_idx = raw_text.find('{')
-        end_idx = raw_text.rfind('}')
+        if start_idx == -1:
+            logger.error(f"No JSON object found in output: {raw_text[:200]}")
+            raise ValueError("No JSON object found in LLM output")
         
-        if start_idx != -1 and end_idx != -1 and start_idx < end_idx:
-            raw_text = raw_text[start_idx:end_idx + 1]
+        # Extract substring starting from first '{'
+        json_candidate = raw_text[start_idx:]
         
-        return raw_text.strip()
+        # Find balanced closing brace by counting braces
+        brace_count = 0
+        end_idx = -1
+        in_string = False
+        escape_next = False
+        
+        for i, char in enumerate(json_candidate):
+            if escape_next:
+                escape_next = False
+                continue
+            
+            if char == '\\':
+                escape_next = True
+                continue
+            
+            if char == '"' and not escape_next:
+                in_string = not in_string
+                continue
+            
+            if not in_string:
+                if char == '{':
+                    brace_count += 1
+                elif char == '}':
+                    brace_count -= 1
+                    if brace_count == 0:
+                        end_idx = i
+                        break
+        
+        if end_idx == -1:
+            logger.error(f"Could not find balanced JSON braces in output: {raw_text[:200]}")
+            raise ValueError("Could not parse JSON from LLM output - unbalanced braces")
+        
+        # Extract the balanced JSON
+        raw_text = json_candidate[:end_idx + 1].strip()
+        
+        return raw_text
