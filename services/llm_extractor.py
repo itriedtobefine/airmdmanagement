@@ -29,6 +29,13 @@ class ParameterExtractor:
 1. Отвечай ТОЛЬКО валидным JSON без markdown, без пояснений, без дополнительного текста.
 2. Используй строго указанную схему JSON.
 3. Если описание не относится к справочникам/реестрам, установи task_type="unknown".
+4. ВНИМАТЕЛЬНО анализируй количество справочников - если пользователь указал "2 справочника", "два реестра" и т.д., создавай отдельный элемент в массиве registries для КАЖДОГО справочника с quantity=1.
+5. Распознавай типы справочников:
+   - "внешний справочник", "справочник с внешним источником", "интеграция с внешним источником" -> task_type="external_integration"
+   - "ручной справочник", "типовой ручной справочник", "справочник с ручным заполнением" -> task_type="manual_registry"
+   - "реестр классификации" -> task_type="classification_registry"
+   - "мастер-данные" -> task_type="master_data"
+   - "нормативно-справочная информация" -> task_type="reference_data"
 
 Доступные значения:
 - task_type: manual_registry, external_integration, classification_registry, reference_data, master_data, ui_component, data_migration, documentation
@@ -38,19 +45,23 @@ class ParameterExtractor:
 
 Пример 1:
 Вход: "Нужно разработать ручной справочник ОКАТО с базовыми полями: код и наименование. Планируется около 500 записей."
-Выход: {"task_type": "manual_registry", "component": "basic_structure", "registry_name": "ОКАТО", "has_external_integration": false, "has_validation_rules": false, "requires_support": false, "estimated_records": 500, "additional_components": []}
+Выход: {"registries": [{"task_type": "manual_registry", "component": "basic_structure", "registry_name": "ОКАТО", "has_external_integration": false, "has_validation_rules": false, "estimated_records": 500, "additional_components": [], "quantity": 1}], "requires_support": true}
 
 Пример 2:
-Вход: "Требуется создать реестр классификации данных со сложными правилами валидации и интеграцией с внешней CRM системой через API. Нужна поддержка и аудит изменений."
-Выход: {"task_type": "classification_registry", "component": "complex", "registry_name": "Реестр классификации данных", "has_external_integration": true, "has_validation_rules": true, "requires_support": true, "estimated_records": null, "additional_components": ["audit_log"]}
+Вход: "Мне нужно сделать 2 внешних справочника и 2 типовых ручных справочника"
+Выход: {"registries": [{"task_type": "external_integration", "component": "api_integration", "registry_name": "Внешний справочник 1", "has_external_integration": true, "has_validation_rules": false, "estimated_records": null, "additional_components": [], "quantity": 1}, {"task_type": "external_integration", "component": "api_integration", "registry_name": "Внешний справочник 2", "has_external_integration": true, "has_validation_rules": false, "estimated_records": null, "additional_components": [], "quantity": 1}, {"task_type": "manual_registry", "component": "basic_structure", "registry_name": "Ручной справочник 1", "has_external_integration": false, "has_validation_rules": false, "estimated_records": null, "additional_components": [], "quantity": 1}, {"task_type": "manual_registry", "component": "basic_structure", "registry_name": "Ручной справочник 2", "has_external_integration": false, "has_validation_rules": false, "estimated_records": null, "additional_components": [], "quantity": 1}], "requires_support": true}
 
 Пример 3:
-Вход: "Разработка мастер-данных контрагентов с золотой записью и функцией сопоставления дубликатов."
-Выход: {"task_type": "master_data", "component": "with_golden_record", "registry_name": "Мастер-данные контрагентов", "has_external_integration": false, "has_validation_rules": false, "requires_support": false, "estimated_records": null, "additional_components": ["bulk_operations"]}
+Вход: "Требуется создать реестр классификации данных со сложными правилами валидации и интеграцией с внешней CRM системой через API. Нужна поддержка и аудит изменений."
+Выход: {"registries": [{"task_type": "classification_registry", "component": "complex", "registry_name": "Реестр классификации данных", "has_external_integration": true, "has_validation_rules": true, "estimated_records": null, "additional_components": ["audit_log"], "quantity": 1}], "requires_support": true}
 
 Пример 4:
+Вход: "Разработка мастер-данных контрагентов с золотой записью и функцией сопоставления дубликатов."
+Выход: {"registries": [{"task_type": "master_data", "component": "with_golden_record", "registry_name": "Мастер-данные контрагентов", "has_external_integration": false, "has_validation_rules": false, "estimated_records": null, "additional_components": ["bulk_operations"], "quantity": 1}], "requires_support": true}
+
+Пример 5:
 Вход: "Создать интернет-магазин с корзиной и оплатой."
-Выход: {"task_type": "unknown", "component": "unknown", "registry_name": "Не применимо", "has_external_integration": false, "has_validation_rules": false, "requires_support": false, "estimated_records": null, "additional_components": []}"""
+Выход: {"registries": [{"task_type": "unknown", "component": "unknown", "registry_name": "Не применимо", "has_external_integration": false, "has_validation_rules": false, "estimated_records": null, "additional_components": [], "quantity": 1}], "requires_support": false}"""
 
     def __init__(self, model_path: Path):
         """
@@ -104,7 +115,7 @@ class ParameterExtractor:
             # Run inference with JSON mode
             response = self.llm(
                 prompt=prompt,
-                max_tokens=512,
+                max_tokens=1024,  # Increased for multiple registries
                 temperature=0.1,  # Low temperature for deterministic output
                 top_p=0.9,
                 stop=["```", "</code>", "\n\n"],
@@ -124,16 +135,27 @@ class ParameterExtractor:
             # Parse JSON
             parsed_data = json.loads(raw_output)
             
-            # Handle case where LLM returns a list of objects - take the first one
-            if isinstance(parsed_data, list):
-                if len(parsed_data) > 0:
-                    parsed_data = parsed_data[0]
-                else:
-                    raise ValueError("LLM returned an empty list instead of a JSON object")
-            
             # Validate that we have a dict
             if not isinstance(parsed_data, dict):
                 raise ValueError(f"LLM returned unexpected type: {type(parsed_data)}")
+            
+            # Handle legacy format - convert single object to list format
+            if "task_type" in parsed_data and "registries" not in parsed_data:
+                # Legacy format detected, convert to new format
+                legacy_item = {
+                    "task_type": parsed_data.get("task_type", "unknown"),
+                    "component": parsed_data.get("component", "basic"),
+                    "registry_name": parsed_data.get("registry_name", "Неизвестный справочник"),
+                    "has_external_integration": parsed_data.get("has_external_integration", False),
+                    "has_validation_rules": parsed_data.get("has_validation_rules", False),
+                    "estimated_records": parsed_data.get("estimated_records"),
+                    "additional_components": parsed_data.get("additional_components", []),
+                    "quantity": parsed_data.get("quantity", 1),
+                }
+                parsed_data = {
+                    "registries": [legacy_item],
+                    "requires_support": parsed_data.get("requires_support", True),
+                }
             
             # Validate against Pydantic schema
             parameters = ExtractedParameters(**parsed_data)

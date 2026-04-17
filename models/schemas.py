@@ -52,10 +52,10 @@ class ComponentLevel(str, Enum):
     UNKNOWN = "unknown"
 
 
-class ExtractedParameters(BaseModel):
+class RegistryItem(BaseModel):
     """
-    Schema for LLM-extracted parameters from user input.
-    Strict JSON schema for forced JSON mode.
+    Single registry/directory item extracted from user input.
+    Represents one specific directory with its parameters.
     """
     task_type: TaskType = Field(
         ...,
@@ -79,10 +79,6 @@ class ExtractedParameters(BaseModel):
         default=False,
         description="Whether validation rules are required"
     )
-    requires_support: bool = Field(
-        default=False,
-        description="Whether annual support is required"
-    )
     estimated_records: Optional[int] = Field(
         default=None,
         ge=0,
@@ -93,10 +89,39 @@ class ExtractedParameters(BaseModel):
         default_factory=list,
         description="Additional components mentioned (audit_log, bulk_operations, search_filter, etc.)"
     )
+    quantity: int = Field(
+        default=1,
+        ge=1,
+        le=100,
+        description="Number of such registries to create"
+    )
 
     class Config:
         json_schema_extra = {
             "required": ["task_type", "component", "registry_name"]
+        }
+
+
+class ExtractedParameters(BaseModel):
+    """
+    Schema for LLM-extracted parameters from user input.
+    Strict JSON schema for forced JSON mode.
+    Contains a list of registry items.
+    """
+    registries: List[RegistryItem] = Field(
+        ...,
+        min_length=1,
+        max_length=50,
+        description="List of registries/directories to be created"
+    )
+    requires_support: bool = Field(
+        default=True,
+        description="Whether annual support is required (default true for all registries)"
+    )
+
+    class Config:
+        json_schema_extra = {
+            "required": ["registries"]
         }
 
 

@@ -13,6 +13,7 @@ import pandas as pd
 
 from models.schemas import (
     ExtractedParameters,
+    RegistryItem,
     CostBreakdownItem,
     CostCalculationResponse,
     TaskType,
@@ -98,6 +99,190 @@ class CostCalculator:
         rate = matched.iloc[0]["hourly_rate_rub"]
         return Decimal(str(rate))
     
+    def _calculate_registry_costs(
+        self, 
+        registry: RegistryItem, 
+        dev_rate: Decimal, 
+        support_rate: Decimal,
+        requires_support: bool
+    ) -> Tuple[List[CostBreakdownItem], List[CostBreakdownItem], List[str]]:
+        """
+        Calculate costs for a single registry item.
+        
+        Returns:
+            Tuple of (development_breakdown, support_breakdown, components_included)
+        """
+        development_breakdown: List[CostBreakdownItem] = []
+        support_breakdown: List[CostBreakdownItem] = []
+        components_included: List[str] = []
+        
+        # Main task development effort
+        main_effort = self._lookup_development_effort(
+            registry.task_type.value, registry.component.value
+        )
+        
+        if main_effort is None:
+            # Use default effort based on task type
+            default_efforts = {
+                "manual_registry": Decimal("6"),
+                "external_integration": Decimal("19"),
+                "classification_registry": Decimal("30"),
+                "reference_data": Decimal("15"),
+                "master_data": Decimal("45"),
+                "ui_component": Decimal("8"),
+                "data_migration": Decimal("10"),
+                "documentation": Decimal("4"),
+            }
+            main_effort = default_efforts.get(registry.task_type.value, Decimal("10"))
+            logger.warning(f"Using default effort for {registry.task_type.value}")
+        
+        # Multiply by quantity
+        total_main_effort = main_effort * registry.quantity
+        main_cost = total_main_effort * dev_rate
+        
+        component_name = f"{registry.task_type.value}:{registry.component.value}"
+        if registry.quantity > 1:
+            component_name += f" (x{registry.quantity})"
+        
+        development_breakdown.append(
+            CostBreakdownItem(
+                component=component_name,
+                effort_hours=self._round_decimal(total_main_effort),
+                rate_rub=self._round_decimal(dev_rate),
+                cost_rub=self._round_decimal(main_cost),
+            )
+        )
+        components_included.append(component_name)
+        
+        # External integration adjustment
+        if registry.has_external_integration:
+            integration_effort = self._lookup_development_effort(
+                "external_integration", "api_integration"
+            )
+            if integration_effort is None:
+                integration_effort = Decimal("10")
+            
+            # Multiply by quantity
+            total_integration_effort = integration_effort * registry.quantity
+            integration_cost = total_integration_effort * dev_rate
+            
+            integration_component = "external_integration"
+            if registry.quantity > 1:
+                integration_component += f" (x{registry.quantity})"
+            
+            development_breakdown.append(
+                CostBreakdownItem(
+                    component=integration_component,
+                    effort_hours=self._round_decimal(total_integration_effort),
+                    rate_rub=self._round_decimal(dev_rate),
+                    cost_rub=self._round_decimal(integration_cost),
+                )
+            )
+            components_included.append(integration_component)
+        
+        # Validation rules adjustment
+        if registry.has_validation_rules:
+            validation_effort = self._lookup_development_effort(
+                "manual_registry", "validation_rules"
+            )
+            if validation_effort is None:
+                validation_effort = Decimal("6")
+            
+            # Multiply by quantity
+            total_validation_effort = validation_effort * registry.quantity
+            validation_cost = total_validation_effort * dev_rate
+            
+            validation_component = "validation_rules"
+            if registry.quantity > 1:
+                validation_component += f" (x{registry.quantity})"
+            
+            development_breakdown.append(
+                CostBreakdownItem(
+                    component=validation_component,
+                    effort_hours=self._round_decimal(total_validation_effort),
+                    rate_rub=self._round_decimal(dev_rate),
+                    cost_rub=self._round_decimal(validation_cost),
+                )
+            )
+            components_included.append(validation_component)
+        
+        # Additional components
+        additional_component_mapping = {
+            "audit_log": ("ui_component", "audit_log"),
+            "bulk_operations": ("ui_component", "bulk_operations"),
+            "search_filter": ("ui_component", "search_filter"),
+            "grid_view": ("ui_component", "grid_view"),
+        }
+        
+        for add_component in registry.additional_components:
+            if add_component in additional_component_mapping:
+                task_t, comp = additional_component_mapping[add_component]
+                add_effort = self._lookup_development_effort(task_t, comp)
+                
+                if add_effort is not None:
+                    # Multiply by quantity
+                    total_add_effort = add_effort * registry.quantity
+                    add_cost = total_add_effort * dev_rate
+                    
+                    add_comp_name = add_component
+                    if registry.quantity > 1:
+                        add_comp_name += f" (x{registry.quantity})"
+                    
+                    development_breakdown.append(
+                        CostBreakdownItem(
+                            component=add_comp_name,
+                            effort_hours=self._round_decimal(total_add_effort),
+                            rate_rub=self._round_decimal(dev_rate),
+                            cost_rub=self._round_decimal(add_cost),
+                        )
+                    )
+                    components_included.append(add_comp_name)
+        
+        # Support calculation (only if explicitly requested)
+        if requires_support:
+            support_effort = self._lookup_support_effort(
+                registry.task_type.value, registry.component.value
+            )
+            
+            if support_effort is None:
+                # Default: external integrations require 2 hours/week if manual,
+                # manual registries require 0.1 hours/week for infrastructure
+                if registry.task_type == TaskType.EXTERNAL_INTEGRATION:
+                    # If this were manual, it would take 2 hours/week to fill
+                    support_effort = Decimal("2")
+                else:
+                    # Infrastructure overhead for manual registries
+                    support_effort = Decimal("0.1")
+            else:
+                # Override with business logic from requirements:
+                # - External integration: 2 hours/week (regardless of CSV value)
+                # - Manual registry: 0.1 hours/week for infrastructure only
+                if registry.task_type == TaskType.EXTERNAL_INTEGRATION:
+                    support_effort = Decimal("2")
+                elif registry.task_type == TaskType.MANUAL_REGISTRY:
+                    support_effort = Decimal("0.1")
+            
+            # Multiply by quantity and by 52 weeks for annual
+            annual_support_effort = support_effort * registry.quantity * Decimal("52")
+            support_cost = annual_support_effort * support_rate
+            
+            support_component = f"{registry.task_type.value}:support"
+            if registry.quantity > 1:
+                support_component += f" (x{registry.quantity})"
+            support_component += f" ({support_effort} ч/нед)"
+            
+            support_breakdown.append(
+                CostBreakdownItem(
+                    component=support_component,
+                    effort_hours=self._round_decimal(annual_support_effort),
+                    rate_rub=self._round_decimal(support_rate),
+                    cost_rub=self._round_decimal(support_cost),
+                )
+            )
+            components_included.append(support_component)
+        
+        return development_breakdown, support_breakdown, components_included
+    
     def calculate(
         self, params: ExtractedParameters
     ) -> CostCalculationResponse:
@@ -110,8 +295,9 @@ class CostCalculator:
         Returns:
             CostCalculationResponse with detailed breakdown
         """
-        # Check for unknown task type
-        if params.task_type == TaskType.UNKNOWN:
+        # Check for unknown task type in all registries
+        has_unknown = any(r.task_type == TaskType.UNKNOWN for r in params.registries)
+        if has_unknown:
             return CostCalculationResponse(
                 success=False,
                 error_message="Описание не относится к сфере справочников и реестров (Reference Data Management / Master Data Management). Пожалуйста, опишите задачу разработки справочника, реестра или мастер-данных.",
@@ -121,151 +307,56 @@ class CostCalculator:
                 support_total_hours_per_year=0.0,
                 support_total_cost_per_year_rub=0.0,
                 summary="Запрос отклонен: не относится к целевому сценарию.",
-                registry_name=params.registry_name,
+                registry_name=", ".join(r.registry_name for r in params.registries),
                 components_included=[],
             )
         
-        development_breakdown: List[CostBreakdownItem] = []
-        support_breakdown: List[CostBreakdownItem] = []
-        components_included: List[str] = []
+        all_dev_breakdown: List[CostBreakdownItem] = []
+        all_support_breakdown: List[CostBreakdownItem] = []
+        all_components: List[str] = []
         
         dev_rate = self._get_hourly_rate("developer")
         support_rate = self._get_hourly_rate("support")
         
-        # Main task development effort
-        main_effort = self._lookup_development_effort(
-            params.task_type.value, params.component.value
-        )
-        
-        if main_effort is None:
-            # Use default effort based on task type
-            default_efforts = {
-                "manual_registry": Decimal("6"),
-                "external_integration": Decimal("10"),
-                "classification_registry": Decimal("30"),
-                "reference_data": Decimal("15"),
-                "master_data": Decimal("45"),
-                "ui_component": Decimal("8"),
-                "data_migration": Decimal("10"),
-                "documentation": Decimal("4"),
-            }
-            main_effort = default_efforts.get(params.task_type.value, Decimal("10"))
-            logger.warning(f"Using default effort for {params.task_type.value}")
-        
-        main_cost = main_effort * dev_rate
-        development_breakdown.append(
-            CostBreakdownItem(
-                component=f"{params.task_type.value}:{params.component.value}",
-                effort_hours=self._round_decimal(main_effort),
-                rate_rub=self._round_decimal(dev_rate),
-                cost_rub=self._round_decimal(main_cost),
+        # Process each registry
+        for idx, registry in enumerate(params.registries):
+            dev_breakdown, support_breakdown, components = self._calculate_registry_costs(
+                registry, dev_rate, support_rate, params.requires_support
             )
-        )
-        components_included.append(f"{params.task_type.value}:{params.component.value}")
-        
-        # Additional components
-        additional_component_mapping = {
-            "audit_log": ("ui_component", "audit_log"),
-            "bulk_operations": ("ui_component", "bulk_operations"),
-            "search_filter": ("ui_component", "search_filter"),
-            "grid_view": ("ui_component", "grid_view"),
-        }
-        
-        for add_component in params.additional_components:
-            if add_component in additional_component_mapping:
-                task_t, comp = additional_component_mapping[add_component]
-                add_effort = self._lookup_development_effort(task_t, comp)
-                
-                if add_effort is not None:
-                    add_cost = add_effort * dev_rate
-                    development_breakdown.append(
-                        CostBreakdownItem(
-                            component=add_component,
-                            effort_hours=self._round_decimal(add_effort),
-                            rate_rub=self._round_decimal(dev_rate),
-                            cost_rub=self._round_decimal(add_cost),
-                        )
-                    )
-                    components_included.append(add_component)
-        
-        # External integration adjustment
-        if params.has_external_integration:
-            integration_effort = self._lookup_development_effort(
-                "external_integration", "api_integration"
-            )
-            if integration_effort is None:
-                integration_effort = Decimal("10")
             
-            integration_cost = integration_effort * dev_rate
-            development_breakdown.append(
-                CostBreakdownItem(
-                    component="external_integration",
-                    effort_hours=self._round_decimal(integration_effort),
-                    rate_rub=self._round_decimal(dev_rate),
-                    cost_rub=self._round_decimal(integration_cost),
-                )
-            )
-            components_included.append("external_integration")
-        
-        # Validation rules adjustment
-        if params.has_validation_rules:
-            validation_effort = self._lookup_development_effort(
-                "manual_registry", "validation_rules"
-            )
-            if validation_effort is None:
-                validation_effort = Decimal("6")
+            # Add index prefix if multiple registries
+            if len(params.registries) > 1:
+                for item in dev_breakdown:
+                    item.component = f"[{idx+1}] {item.component}"
+                for item in support_breakdown:
+                    item.component = f"[{idx+1}] {item.component}"
+                components = [f"[{idx+1}] {c}" for c in components]
             
-            validation_cost = validation_effort * dev_rate
-            development_breakdown.append(
-                CostBreakdownItem(
-                    component="validation_rules",
-                    effort_hours=self._round_decimal(validation_effort),
-                    rate_rub=self._round_decimal(dev_rate),
-                    cost_rub=self._round_decimal(validation_cost),
-                )
-            )
-            components_included.append("validation_rules")
+            all_dev_breakdown.extend(dev_breakdown)
+            all_support_breakdown.extend(support_breakdown)
+            all_components.extend(components)
         
         # Calculate totals
         total_dev_hours = sum(
-            Decimal(str(item.effort_hours)) for item in development_breakdown
+            Decimal(str(item.effort_hours)) for item in all_dev_breakdown
         )
         total_dev_cost = sum(
-            Decimal(str(item.cost_rub)) for item in development_breakdown
+            Decimal(str(item.cost_rub)) for item in all_dev_breakdown
         )
-        
-        # Support calculation (only if explicitly requested)
-        if params.requires_support:
-            support_effort = self._lookup_support_effort(
-                params.task_type.value, params.component.value
-            )
-            
-            if support_effort is None:
-                support_effort = Decimal("5")  # Default support hours
-            
-            support_cost = support_effort * support_rate
-            support_breakdown.append(
-                CostBreakdownItem(
-                    component=f"{params.task_type.value}:support",
-                    effort_hours=self._round_decimal(support_effort),
-                    rate_rub=self._round_decimal(support_rate),
-                    cost_rub=self._round_decimal(support_cost),
-                )
-            )
-            components_included.append("support")
         
         total_support_hours = sum(
-            Decimal(str(item.effort_hours)) for item in support_breakdown
+            Decimal(str(item.effort_hours)) for item in all_support_breakdown
         )
         total_support_cost = sum(
-            Decimal(str(item.cost_rub)) for item in support_breakdown
+            Decimal(str(item.cost_rub)) for item in all_support_breakdown
         )
         
         # Build summary
+        registry_names = ", ".join(r.registry_name for r in params.registries)
         summary_parts = [
-            f"Справочник: {params.registry_name}",
-            f"Тип задачи: {params.task_type.value}",
-            f"Компоненты: {', '.join(components_included)}",
+            f"Справочники: {registry_names}",
+            f"Всего справочников: {len(params.registries)}",
+            f"Компоненты: {', '.join(all_components[:5])}" + ("..." if len(all_components) > 5 else ""),
             f"Ставка разработки: {self._round_decimal(dev_rate)} руб/час",
         ]
         
@@ -292,9 +383,9 @@ class CostCalculator:
             development_total_cost_rub=self._round_decimal(total_dev_cost),
             support_total_hours_per_year=self._round_decimal(total_support_hours),
             support_total_cost_per_year_rub=self._round_decimal(total_support_cost),
-            development_breakdown=development_breakdown,
-            support_breakdown=support_breakdown,
+            development_breakdown=all_dev_breakdown,
+            support_breakdown=all_support_breakdown,
             summary=summary,
-            registry_name=params.registry_name,
-            components_included=components_included,
+            registry_name=registry_names,
+            components_included=all_components,
         )
