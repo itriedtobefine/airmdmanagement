@@ -126,10 +126,10 @@ class ParameterExtractor:
             # Run inference with JSON mode
             response = self.llm(
                 prompt=prompt,
-                max_tokens=1024,  # Increased for multiple registries
+                max_tokens=2048,  # Increased for multiple registries and complex responses
                 temperature=0.1,  # Low temperature for deterministic output
                 top_p=0.9,
-                stop=["```", "</code>", "\n\n"],
+                stop=["```", "</code>"],  # Removed "\\n\\n" to allow full JSON generation
                 echo=False,
             )
             
@@ -138,7 +138,13 @@ class ParameterExtractor:
             logger.info("===================")
             
             raw_output = response["choices"][0]["text"].strip()
+            finish_reason = response["choices"][0].get("finish_reason", "unknown")
             logger.debug(f"Raw LLM output: {raw_output}")
+            logger.debug(f"Finish reason: {finish_reason}")
+            
+            # Check if response was truncated
+            if finish_reason == "length":
+                logger.warning("LLM response was truncated due to token limit. Attempting to recover partial JSON...")
             
             # Clean up potential markdown artifacts
             raw_output = self._clean_json_output(raw_output)
@@ -184,12 +190,16 @@ class ParameterExtractor:
         """
         Clean potential markdown or extra formatting from LLM output.
         Uses robust JSON extraction by finding balanced braces.
+        Can attempt to repair truncated JSON if needed.
         
         Args:
             raw_text: Raw text from LLM
             
         Returns:
             Cleaned JSON string
+            
+        Raises:
+            ValueError: If no valid JSON can be extracted
         """
         # Remove markdown code blocks if present
         if raw_text.startswith("```json"):
@@ -212,6 +222,7 @@ class ParameterExtractor:
         
         # Find balanced closing brace by counting braces
         brace_count = 0
+        bracket_count = 0
         end_idx = -1
         in_string = False
         escape_next = False
@@ -237,8 +248,78 @@ class ParameterExtractor:
                     if brace_count == 0:
                         end_idx = i
                         break
+                elif char == '[':
+                    bracket_count += 1
+                elif char == ']':
+                    bracket_count -= 1
         
         if end_idx == -1:
+            # JSON might be truncated - try to repair by adding closing brackets/braces
+            logger.warning(f"JSON appears truncated. Attempting to repair...")
+            
+            # Find where it cuts off
+            last_complete_pos = 0
+            brace_count = 0
+            bracket_count = 0
+            in_string = False
+            escape_next = False
+            
+            for i, char in enumerate(json_candidate):
+                if escape_next:
+                    escape_next = False
+                    last_complete_pos = i + 1
+                    continue
+                
+                if char == '\\':
+                    escape_next = True
+                    last_complete_pos = i + 1
+                    continue
+                
+                if char == '"' and not escape_next:
+                    in_string = not in_string
+                    if not in_string:
+                        last_complete_pos = i + 1
+                    continue
+                
+                if not in_string:
+                    if char == '{':
+                        brace_count += 1
+                    elif char == '}':
+                        brace_count -= 1
+                        if brace_count == 0:
+                            last_complete_pos = i + 1
+                    elif char == '[':
+                        bracket_count += 1
+                    elif char == ']':
+                        bracket_count -= 1
+                        if bracket_count == 0 and brace_count == 1:
+                            # Inside main object, array closed properly
+                            last_complete_pos = i + 1
+            
+            # Try to close all open structures
+            if last_complete_pos > 0 and brace_count > 0:
+                # We have unclosed braces - try to close them
+                repaired = json_candidate[:last_complete_pos]
+                
+                # Close any open arrays first
+                while bracket_count > 0:
+                    repaired += ']'
+                    bracket_count -= 1
+                
+                # Then close braces
+                while brace_count > 0:
+                    repaired += '}'
+                    brace_count -= 1
+                
+                logger.info(f"Repaired truncated JSON: {repaired[:100]}...")
+                
+                # Verify it's valid JSON now
+                try:
+                    json.loads(repaired)
+                    return repaired.strip()
+                except json.JSONDecodeError:
+                    logger.error(f"Repair failed, still invalid JSON")
+            
             logger.error(f"Could not find balanced JSON braces in output: {raw_text[:200]}")
             raise ValueError("Could not parse JSON from LLM output - unbalanced braces")
         
