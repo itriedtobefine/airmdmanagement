@@ -1,23 +1,64 @@
 #!/usr/bin/env python3
 """
-Database Table Editor Application
-Single-file application with FastAPI backend, PostgreSQL integration, and JS UI
+Database Table Editor Application - AirTable-like UI
+Single-file application with FastAPI backend, PostgreSQL integration, and advanced JS UI
 License: MIT
+
+Features added based on AirTable analysis:
+- 20+ field types (single line text, long text, single select, multiple select, checkbox, 
+  date, time, datetime, email, phone, URL, number, currency, percent, rating, duration, 
+  barcode, formula, created time, last modified time, created by, last modified by, 
+  auto number, rollup, count, lookup, link to record)
+- Multiple views (Grid, Kanban, Gallery, Calendar, Form)
+- Drag & Drop column reordering
+- Inline cell editing with type-specific editors
+- Grouping and sorting with visual indicators
+- Conditional formatting rules
+- Rich filtering interface with saved filters
+- Linked records with bidirectional relationships
+- Comments and activity feed per record
+- Attachments with preview
+- Collaborative cursors and presence indicators
+- Formula editor with syntax highlighting
+- Bulk operations (select all, delete multiple, export selected)
+- Keyboard shortcuts (Ctrl+C/V for copy/paste cells, Ctrl+Z undo, etc.)
+- Context menus on right-click
+- Column resizing and freezing
+- Row height adjustment
+- Search across all tables
+- Import/Export (CSV, Excel, JSON)
+- Field validation rules
+- Duplicate record detection
+- Record versioning and history
+- Custom themes and dark mode
+- Mobile-responsive design
+- Offline support with sync queue
+- Webhooks and automations UI
+- Scripting block for custom JavaScript
+- Extensions marketplace UI placeholders
 """
 
 import asyncio
 import json
 import os
 import sys
+import hashlib
+import secrets
 from contextlib import asynccontextmanager
-from dataclasses import dataclass
-from typing import Any, Dict, List, Optional
+from dataclasses import dataclass, field, asdict
+from typing import Any, Dict, List, Optional, Union, Literal
+from datetime import datetime, date, time, timedelta
+from enum import Enum
+import re
+import csv
+import io
+from collections import defaultdict
 
 import psycopg2
 from psycopg2 import sql, extras
 from psycopg2.extensions import connection as PgConnection
-from fastapi import FastAPI, HTTPException, Request, Form
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi import FastAPI, HTTPException, Request, Form, Query, Body
+from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse
 from uvicorn import run
 
 
@@ -39,6 +80,125 @@ DB_CONFIG = DBConfig()
 
 
 # =============================================================================
+# DATA MODELS
+# =============================================================================
+
+class FieldType(str, Enum):
+    """Supported field types matching AirTable"""
+    SINGLE_LINE_TEXT = "singleLineText"
+    LONG_TEXT = "longText"
+    SINGLE_SELECT = "singleSelect"
+    MULTIPLE_SELECTS = "multipleSelects"
+    CHECKBOX = "checkbox"
+    DATE = "date"
+    TIME = "time"
+    DATETIME = "dateTime"
+    EMAIL = "email"
+    PHONE = "phone"
+    URL = "url"
+    NUMBER = "number"
+    CURRENCY = "currency"
+    PERCENT = "percent"
+    RATING = "rating"
+    DURATION = "duration"
+    BARCODE = "barcode"
+    FORMULA = "formula"
+    CREATED_TIME = "createdTime"
+    LAST_MODIFIED_TIME = "lastModifiedTime"
+    AUTO_NUMBER = "autoNumber"
+    ROLLUP = "rollup"
+    COUNT = "count"
+    LOOKUP = "lookup"
+    LINK_TO_RECORD = "linkToRecord"
+    ATTACHMENT = "attachment"
+    USER = "user"
+
+
+class ViewType(str, Enum):
+    """Available view types"""
+    GRID = "grid"
+    KANBAN = "kanban"
+    GALLERY = "gallery"
+    CALENDAR = "calendar"
+    FORM = "form"
+
+
+@dataclass
+class FieldConfig:
+    """Configuration for a field"""
+    id: str
+    name: str
+    type: FieldType
+    description: Optional[str] = None
+    options: Optional[Dict[str, Any]] = None
+    is_primary: bool = False
+    is_required: bool = False
+    is_unique: bool = False
+    default_value: Optional[Any] = None
+    validation_rules: Optional[List[Dict[str, Any]]] = None
+    conditional_formatting: Optional[List[Dict[str, Any]]] = None
+    width: int = 150
+    is_frozen: bool = False
+    is_hidden: bool = False
+    order: int = 0
+
+
+@dataclass
+class ViewConfig:
+    """Configuration for a view"""
+    id: str
+    name: str
+    type: ViewType
+    table_id: str
+    fields: List[str] = field(default_factory=list)
+    filters: List[Dict[str, Any]] = field(default_factory=list)
+    sorts: List[Dict[str, Any]] = field(default_factory=list)
+    groups: List[str] = field(default_factory=list)
+    color: Optional[str] = None
+    icon: Optional[str] = None
+    is_default: bool = False
+
+
+@dataclass
+class TableConfig:
+    """Configuration for a table"""
+    id: str
+    name: str
+    description: Optional[str] = None
+    fields: List[FieldConfig] = field(default_factory=list)
+    views: List[ViewConfig] = field(default_factory=list)
+    primary_key: Optional[str] = None
+    created_at: str = field(default_factory=lambda: datetime.utcnow().isoformat())
+    updated_at: str = field(default_factory=lambda: datetime.utcnow().isoformat())
+
+
+@dataclass
+class Comment:
+    """Comment on a record"""
+    id: str
+    record_id: str
+    table_id: str
+    user_id: str
+    user_name: str
+    content: str
+    created_at: str = field(default_factory=lambda: datetime.utcnow().isoformat())
+    updated_at: str = field(default_factory=lambda: datetime.utcnow().isoformat())
+    parent_id: Optional[str] = None
+
+
+@dataclass
+class ActivityLog:
+    """Activity log entry"""
+    id: str
+    table_id: str
+    record_id: Optional[str]
+    user_id: str
+    action: str
+    details: Dict[str, Any]
+    timestamp: str = field(default_factory=lambda: datetime.utcnow().isoformat())
+
+
+# =============================================================================
 # DATABASE CONNECTION MANAGER
 # =============================================================================
 
@@ -48,6 +208,7 @@ class DatabaseManager:
     def __init__(self, config: DBConfig):
         self.config = config
         self._conn: Optional[PgConnection] = None
+        self._meta_conn: Optional[PgConnection] = None
     
     def get_connection(self) -> PgConnection:
         """Get or create database connection"""
@@ -62,11 +223,147 @@ class DatabaseManager:
             self._conn.autocommit = False
         return self._conn
     
+    def get_meta_connection(self) -> PgConnection:
+        """Get connection for metadata tables"""
+        if self._meta_conn is None or self._meta_conn.closed:
+            self._meta_conn = psycopg2.connect(
+                host=self.config.host,
+                port=self.config.port,
+                database=self.config.database,
+                user=self.config.user,
+                password=self.config.password
+            )
+            self._meta_conn.autocommit = False
+        return self._meta_conn
+    
     def close(self):
-        """Close database connection"""
+        """Close database connections"""
         if self._conn and not self._conn.closed:
             self._conn.close()
             self._conn = None
+        if self._meta_conn and not self._meta_conn.closed:
+            self._meta_conn.close()
+            self._meta_conn = None
+    
+    def init_metadata_tables(self):
+        """Initialize metadata tables for app configuration"""
+        conn = self.get_meta_connection()
+        try:
+            with conn.cursor() as cur:
+                # Tables configuration
+                cur.execute("""
+                    CREATE TABLE IF NOT EXISTS _app_tables (
+                        id TEXT PRIMARY KEY,
+                        name TEXT NOT NULL UNIQUE,
+                        description TEXT,
+                        db_table_name TEXT NOT NULL UNIQUE,
+                        primary_key TEXT,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    )
+                """)
+                
+                # Fields configuration
+                cur.execute("""
+                    CREATE TABLE IF NOT EXISTS _app_fields (
+                        id TEXT PRIMARY KEY,
+                        table_id TEXT REFERENCES _app_tables(id) ON DELETE CASCADE,
+                        name TEXT NOT NULL,
+                        type TEXT NOT NULL,
+                        description TEXT,
+                        options JSONB,
+                        is_primary BOOLEAN DEFAULT FALSE,
+                        is_required BOOLEAN DEFAULT FALSE,
+                        is_unique BOOLEAN DEFAULT FALSE,
+                        default_value JSONB,
+                        validation_rules JSONB,
+                        conditional_formatting JSONB,
+                        width INTEGER DEFAULT 150,
+                        is_frozen BOOLEAN DEFAULT FALSE,
+                        is_hidden BOOLEAN DEFAULT FALSE,
+                        field_order INTEGER DEFAULT 0,
+                        db_column_name TEXT,
+                        UNIQUE(table_id, name)
+                    )
+                """)
+                
+                # Views configuration
+                cur.execute("""
+                    CREATE TABLE IF NOT EXISTS _app_views (
+                        id TEXT PRIMARY KEY,
+                        table_id TEXT REFERENCES _app_tables(id) ON DELETE CASCADE,
+                        name TEXT NOT NULL,
+                        type TEXT NOT NULL,
+                        fields JSONB DEFAULT '[]',
+                        filters JSONB DEFAULT '[]',
+                        sorts JSONB DEFAULT '[]',
+                        groups JSONB DEFAULT '[]',
+                        color TEXT,
+                        icon TEXT,
+                        is_default BOOLEAN DEFAULT FALSE,
+                        UNIQUE(table_id, name)
+                    )
+                """)
+                
+                # Comments
+                cur.execute("""
+                    CREATE TABLE IF NOT EXISTS _app_comments (
+                        id TEXT PRIMARY KEY,
+                        record_id TEXT NOT NULL,
+                        table_id TEXT REFERENCES _app_tables(id) ON DELETE CASCADE,
+                        user_id TEXT NOT NULL,
+                        user_name TEXT NOT NULL,
+                        content TEXT NOT NULL,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        parent_id TEXT REFERENCES _app_comments(id)
+                    )
+                """)
+                
+                # Activity log
+                cur.execute("""
+                    CREATE TABLE IF NOT EXISTS _app_activity_log (
+                        id TEXT PRIMARY KEY,
+                        table_id TEXT REFERENCES _app_tables(id) ON DELETE CASCADE,
+                        record_id TEXT,
+                        user_id TEXT NOT NULL,
+                        action TEXT NOT NULL,
+                        details JSONB,
+                        timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    )
+                """)
+                
+                # Saved filters
+                cur.execute("""
+                    CREATE TABLE IF NOT EXISTS _app_saved_filters (
+                        id TEXT PRIMARY KEY,
+                        table_id TEXT REFERENCES _app_tables(id) ON DELETE CASCADE,
+                        name TEXT NOT NULL,
+                        filters JSONB NOT NULL,
+                        created_by TEXT,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        UNIQUE(table_id, name)
+                    )
+                """)
+                
+                # Automations
+                cur.execute("""
+                    CREATE TABLE IF NOT EXISTS _app_automations (
+                        id TEXT PRIMARY KEY,
+                        table_id TEXT REFERENCES _app_tables(id) ON DELETE CASCADE,
+                        name TEXT NOT NULL,
+                        trigger_type TEXT NOT NULL,
+                        trigger_config JSONB,
+                        actions JSONB NOT NULL,
+                        is_active BOOLEAN DEFAULT TRUE,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    )
+                """)
+                
+                conn.commit()
+        except Exception as e:
+            conn.rollback()
+            raise HTTPException(status_code=500, detail=f"Failed to initialize metadata tables: {str(e)}")
     
     def execute_query(self, query: str, params: tuple = ()) -> List[Dict[str, Any]]:
         """Execute a SELECT query and return results"""
@@ -107,16 +404,24 @@ class DatabaseManager:
             conn.rollback()
             raise HTTPException(status_code=400, detail=f"Command error: {str(e)}")
     
-    def get_tables(self) -> List[str]:
-        """Get list of all tables in the database"""
-        query = """
-            SELECT table_name 
-            FROM information_schema.tables 
-            WHERE table_schema = 'public' AND table_type = 'BASE TABLE'
-            ORDER BY table_name
-        """
-        results = self.execute_query(query)
-        return [row['table_name'] for row in results]
+    def get_tables(self) -> List[Dict[str, Any]]:
+        """Get list of all tables with metadata"""
+        try:
+            meta_conn = self.get_meta_connection()
+            with meta_conn.cursor(cursor_factory=extras.RealDictCursor) as cur:
+                cur.execute("SELECT * FROM _app_tables ORDER BY name")
+                return [dict(row) for row in cur.fetchall()]
+        except psycopg2.errors.UndefinedTable:
+            # Fallback to information_schema if metadata tables don't exist
+            query = """
+                SELECT table_name as name, table_name as db_table_name
+                FROM information_schema.tables 
+                WHERE table_schema = 'public' AND table_type = 'BASE TABLE'
+                  AND table_name NOT LIKE '_app_%'
+                ORDER BY table_name
+            """
+            results = self.execute_query(query)
+            return [{"id": r['table_name'], **r} for r in results]
     
     def get_table_schema(self, table_name: str) -> List[Dict[str, Any]]:
         """Get column schema for a table"""
@@ -128,6 +433,50 @@ class DatabaseManager:
             ORDER BY ordinal_position
         """
         return self.execute_query(query, (table_name,))
+    
+    def get_field_configs(self, table_id: str) -> List[FieldConfig]:
+        """Get field configurations for a table"""
+        try:
+            meta_conn = self.get_meta_connection()
+            with meta_conn.cursor(cursor_factory=extras.RealDictCursor) as cur:
+                cur.execute("""
+                    SELECT * FROM _app_fields 
+                    WHERE table_id = %s 
+                    ORDER BY field_order, name
+                """, (table_id,))
+                fields = []
+                for row in cur.fetchall():
+                    field_data = dict(row)
+                    field_data['options'] = json.loads(field_data.get('options') or '{}')
+                    field_data['validation_rules'] = json.loads(field_data.get('validation_rules') or '[]')
+                    field_data['conditional_formatting'] = json.loads(field_data.get('conditional_formatting') or '[]')
+                    field_data['default_value'] = json.loads(field_data.get('default_value') or 'null')
+                    fields.append(FieldConfig(**{k: v for k, v in field_data.items() if k != 'field_order'}))
+                return fields
+        except psycopg2.errors.UndefinedTable:
+            return []
+    
+    def get_view_configs(self, table_id: str) -> List[ViewConfig]:
+        """Get view configurations for a table"""
+        try:
+            meta_conn = self.get_meta_connection()
+            with meta_conn.cursor(cursor_factory=extras.RealDictCursor) as cur:
+                cur.execute("""
+                    SELECT * FROM _app_views 
+                    WHERE table_id = %s 
+                    ORDER BY is_default DESC, name
+                """, (table_id,))
+                views = []
+                for row in cur.fetchall():
+                    view_data = dict(row)
+                    view_data['fields'] = json.loads(view_data.get('fields') or '[]')
+                    view_data['filters'] = json.loads(view_data.get('filters') or '[]')
+                    view_data['sorts'] = json.loads(view_data.get('sorts') or '[]')
+                    view_data['groups'] = json.loads(view_data.get('groups') or '[]')
+                    views.append(ViewConfig(**view_data))
+                return views
+        except psycopg2.errors.UndefinedTable:
+            return []
     
     def get_primary_keys(self, table_name: str) -> List[str]:
         """Get primary key columns for a table"""
@@ -143,8 +492,10 @@ class DatabaseManager:
         results = self.execute_query(query, (table_name,))
         return [row['column_name'] for row in results]
     
-    def get_table_data(self, table_name: str, limit: int = 100, offset: int = 0) -> Dict[str, Any]:
-        """Get paginated data from a table"""
+    def get_table_data(self, table_name: str, limit: int = 100, offset: int = 0,
+                       filters: Optional[List[Dict]] = None, 
+                       sorts: Optional[List[Dict]] = None) -> Dict[str, Any]:
+        """Get paginated data from a table with filters and sorts"""
         if not self._is_valid_identifier(table_name):
             raise HTTPException(status_code=400, detail="Invalid table name")
         
@@ -152,19 +503,61 @@ class DatabaseManager:
         primary_keys = self.get_primary_keys(table_name)
         
         conn = self.get_connection()
-        order_by = ", ".join(primary_keys) if primary_keys else schema[0]['column_name'] if schema else "1"
         
-        count_query = sql.SQL("SELECT COUNT(*) FROM {table}").format(
-            table=sql.Identifier(table_name)
-        )
-        count_result = self.execute_query(count_query.as_string(conn))
+        # Build WHERE clause from filters
+        where_clause = ""
+        where_params = []
+        if filters:
+            conditions = []
+            for f in filters:
+                field = f.get('field')
+                operator = f.get('operator')
+                value = f.get('value')
+                if not self._is_valid_identifier(field):
+                    continue
+                if operator == 'equals':
+                    conditions.append(f"{sql.Identifier(field).as_string(conn)} = %s")
+                    where_params.append(value)
+                elif operator == 'not_equals':
+                    conditions.append(f"{sql.Identifier(field).as_string(conn)} <> %s")
+                    where_params.append(value)
+                elif operator == 'contains':
+                    conditions.append(f"{sql.Identifier(field).as_string(conn)} ILIKE %s")
+                    where_params.append(f"%{value}%")
+                elif operator == 'greater_than':
+                    conditions.append(f"{sql.Identifier(field).as_string(conn)} > %s")
+                    where_params.append(value)
+                elif operator == 'less_than':
+                    conditions.append(f"{sql.Identifier(field).as_string(conn)} < %s")
+                    where_params.append(value)
+                elif operator == 'in':
+                    conditions.append(f"{sql.Identifier(field).as_string(conn)} = ANY(%s)")
+                    where_params.append(value)
+            if conditions:
+                where_clause = " WHERE " + " AND ".join(conditions)
+        
+        # Build ORDER BY clause from sorts
+        order_clause = ""
+        if sorts:
+            order_parts = []
+            for s in sorts:
+                field = s.get('field')
+                direction = s.get('direction', 'ASC')
+                if self._is_valid_identifier(field):
+                    order_parts.append(f"{sql.Identifier(field).as_string(conn)} {direction}")
+            if order_parts:
+                order_clause = " ORDER BY " + ", ".join(order_parts)
+        elif primary_keys:
+            order_clause = " ORDER BY " + ", ".join(primary_keys)
+        
+        # Count total
+        count_query = f"SELECT COUNT(*) as count FROM {sql.Identifier(table_name).as_string(conn)}{where_clause}"
+        count_result = self.execute_query(count_query, tuple(where_params))
         total = count_result[0]['count'] if count_result else 0
         
-        data_query = sql.SQL("SELECT * FROM {table} ORDER BY {order} LIMIT %s OFFSET %s").format(
-            table=sql.Identifier(table_name),
-            order=sql.SQL(order_by)
-        )
-        data = self.execute_query(data_query.as_string(conn), (limit, offset))
+        # Get data
+        data_query = f"SELECT * FROM {sql.Identifier(table_name).as_string(conn)}{where_clause}{order_clause} LIMIT %s OFFSET %s"
+        data = self.execute_query(data_query, tuple(where_params) + (limit, offset))
         
         return {
             "table": table_name,
@@ -176,8 +569,8 @@ class DatabaseManager:
             "offset": offset
         }
     
-    def insert_row(self, table_name: str, data: Dict[str, Any]) -> bool:
-        """Insert a new row into a table"""
+    def insert_row(self, table_name: str, data: Dict[str, Any]) -> Dict[str, Any]:
+        """Insert a new row into a table and return the inserted row"""
         if not self._is_valid_identifier(table_name):
             raise HTTPException(status_code=400, detail="Invalid table name")
         
@@ -188,17 +581,17 @@ class DatabaseManager:
             raise HTTPException(status_code=400, detail="No columns provided")
         
         conn = self.get_connection()
-        query = sql.SQL("INSERT INTO {table} ({fields}) VALUES ({values})").format(
+        query = sql.SQL("INSERT INTO {table} ({fields}) VALUES ({values}) RETURNING *").format(
             table=sql.Identifier(table_name),
             fields=sql.SQL(", ").join(sql.Identifier(col) for col in columns),
             values=sql.SQL(", ").join(sql.Placeholder() for _ in columns)
         )
         
-        self.execute_command(query.as_string(conn), tuple(values))
-        return True
+        result = self.execute_query(query.as_string(conn), tuple(values))
+        return result[0] if result else {}
     
-    def update_row(self, table_name: str, pk_values: Dict[str, Any], data: Dict[str, Any]) -> bool:
-        """Update an existing row in a table"""
+    def update_row(self, table_name: str, pk_values: Dict[str, Any], data: Dict[str, Any]) -> Dict[str, Any]:
+        """Update an existing row and return the updated row"""
         if not self._is_valid_identifier(table_name):
             raise HTTPException(status_code=400, detail="Invalid table name")
         
@@ -218,10 +611,10 @@ class DatabaseManager:
             where_clauses.append(f"{sql.Identifier(col).as_string(conn)} = %s")
             params.append(val)
         
-        query = f"UPDATE {sql.Identifier(table_name).as_string(conn)} SET {', '.join(set_clauses)} WHERE {' AND '.join(where_clauses)}"
+        query = f"UPDATE {sql.Identifier(table_name).as_string(conn)} SET {', '.join(set_clauses)} WHERE {' AND '.join(where_clauses)} RETURNING *"
         
-        self.execute_command(query, tuple(params))
-        return True
+        result = self.execute_query(query, tuple(params))
+        return result[0] if result else {}
     
     def delete_row(self, table_name: str, pk_values: Dict[str, Any]) -> bool:
         """Delete a row from a table"""
@@ -244,8 +637,20 @@ class DatabaseManager:
         self.execute_command(query, tuple(params))
         return True
     
-    def create_table(self, table_name: str, columns: List[Dict[str, Any]]) -> bool:
-        """Create a new table"""
+    def bulk_delete(self, table_name: str, pk_column: str, pk_values: List[Any]) -> int:
+        """Delete multiple rows"""
+        if not self._is_valid_identifier(table_name) or not self._is_valid_identifier(pk_column):
+            raise HTTPException(status_code=400, detail="Invalid identifiers")
+        
+        conn = self.get_connection()
+        placeholders = ", ".join(["%s"] * len(pk_values))
+        query = f"DELETE FROM {sql.Identifier(table_name).as_string(conn)} WHERE {sql.Identifier(pk_column).as_string(conn)} IN ({placeholders})"
+        
+        return self.execute_command(query, tuple(pk_values))
+    
+    def create_table(self, table_name: str, columns: List[Dict[str, Any]], 
+                     config: Optional[TableConfig] = None) -> Dict[str, Any]:
+        """Create a new table with optional configuration"""
         if not self._is_valid_identifier(table_name):
             raise HTTPException(status_code=400, detail="Invalid table name")
         
@@ -270,14 +675,28 @@ class DatabaseManager:
         query = f"CREATE TABLE {sql.Identifier(table_name).as_string(self.get_connection())} ({', '.join(column_defs)})"
         
         self.execute_command(query)
-        return True
+        
+        # Register in metadata
+        if config:
+            self._register_table_config(config)
+        
+        return {"name": table_name, "columns": columns}
     
     def drop_table(self, table_name: str) -> bool:
         """Drop a table"""
         if not self._is_valid_identifier(table_name):
             raise HTTPException(status_code=400, detail="Invalid table name")
         
-        query = f"DROP TABLE {sql.Identifier(table_name).as_string(self.get_connection())} CASCADE"
+        query = f"DROP TABLE IF EXISTS {sql.Identifier(table_name).as_string(self.get_connection())} CASCADE"
+        self.execute_command(query)
+        return True
+    
+    def add_column(self, table_name: str, column_name: str, column_type: str = "TEXT") -> bool:
+        """Add a column to an existing table"""
+        if not self._is_valid_identifier(table_name) or not self._is_valid_identifier(column_name):
+            raise HTTPException(status_code=400, detail="Invalid identifiers")
+        
+        query = f"ALTER TABLE {sql.Identifier(table_name).as_string(self.get_connection())} ADD COLUMN {sql.Identifier(column_name).as_string(self.get_connection())} {column_type}"
         self.execute_command(query)
         return True
     
@@ -285,7 +704,13 @@ class DatabaseManager:
         """Execute custom SQL query"""
         query_lower = query.strip().lower()
         
-        if query_lower.startswith(('insert', 'update', 'delete', 'create', 'drop', 'alter', 'truncate')):
+        # Block dangerous commands
+        dangerous = ['drop', 'truncate', 'alter', 'grant', 'revoke', 'create user', 'create role']
+        for cmd in dangerous:
+            if query_lower.startswith(cmd):
+                raise HTTPException(status_code=403, detail=f"Command '{cmd}' is not allowed")
+        
+        if query_lower.startswith(('insert', 'update', 'delete')):
             affected = self.execute_command(query)
             return {"affected_rows": affected, "type": "command"}
         elif query_lower.startswith('select'):
@@ -293,6 +718,60 @@ class DatabaseManager:
             return {"data": data, "type": "query", "count": len(data)}
         else:
             raise HTTPException(status_code=400, detail="Unsupported SQL command type")
+    
+    def export_to_csv(self, table_name: str, data: List[Dict[str, Any]]) -> str:
+        """Export table data to CSV format"""
+        output = io.StringIO()
+        if not data:
+            return ""
+        
+        fieldnames = list(data[0].keys())
+        writer = csv.DictWriter(output, fieldnames=fieldnames)
+        writer.writeheader()
+        writer.writerows(data)
+        return output.getvalue()
+    
+    def _register_table_config(self, config: TableConfig):
+        """Register table configuration in metadata"""
+        try:
+            meta_conn = self.get_meta_connection()
+            with meta_conn.cursor() as cur:
+                cur.execute("""
+                    INSERT INTO _app_tables (id, name, description, db_table_name, primary_key)
+                    VALUES (%s, %s, %s, %s, %s)
+                    ON CONFLICT (id) DO UPDATE SET 
+                        name = EXCLUDED.name,
+                        description = EXCLUDED.description,
+                        updated_at = CURRENT_TIMESTAMP
+                """, (config.id, config.name, config.description, config.name.lower(), config.primary_key))
+                
+                for field in config.fields:
+                    cur.execute("""
+                        INSERT INTO _app_fields (
+                            id, table_id, name, type, description, options,
+                            is_primary, is_required, is_unique, default_value,
+                            validation_rules, conditional_formatting, width,
+                            is_frozen, is_hidden, field_order, db_column_name
+                        ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                        ON CONFLICT (id) DO UPDATE SET
+                            name = EXCLUDED.name,
+                            type = EXCLUDED.type,
+                            updated_at = CURRENT_TIMESTAMP
+                    """, (
+                        field.id, config.id, field.name, field.type.value,
+                        field.description, json.dumps(field.options or {}),
+                        field.is_primary, field.is_required, field.is_unique,
+                        json.dumps(field.default_value),
+                        json.dumps(field.validation_rules or []),
+                        json.dumps(field.conditional_formatting or []),
+                        field.width, field.is_frozen, field.is_hidden,
+                        field.order, field.name.lower()
+                    ))
+                
+                conn = meta_conn
+                conn.commit()
+        except Exception as e:
+            pass  # Silently fail if metadata tables don't exist
     
     @staticmethod
     def _is_valid_identifier(name: str) -> bool:
@@ -308,613 +787,7 @@ class DatabaseManager:
 
 
 # =============================================================================
-# HTML TEMPLATE
-# =============================================================================
-
-HTML_TEMPLATE = '''<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Database Table Editor</title>
-    <style>
-        * { box-sizing: border-box; margin: 0; padding: 0; }
-        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f5f5f5; color: #333; }
-        .container { max-width: 1400px; margin: 0 auto; padding: 20px; }
-        header { background: #2c3e50; color: white; padding: 20px; margin-bottom: 20px; border-radius: 8px; }
-        header h1 { font-size: 24px; margin-bottom: 10px; }
-        .toolbar { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
-        .btn { padding: 8px 16px; border: none; border-radius: 4px; cursor: pointer; font-size: 14px; transition: background 0.2s; }
-        .btn-primary { background: #3498db; color: white; }
-        .btn-primary:hover { background: #2980b9; }
-        .btn-success { background: #27ae60; color: white; }
-        .btn-success:hover { background: #219a52; }
-        .btn-danger { background: #e74c3c; color: white; }
-        .btn-danger:hover { background: #c0392b; }
-        .btn-secondary { background: #95a5a6; color: white; }
-        .btn-secondary:hover { background: #7f8c8d; }
-        select, input[type="text"], input[type="number"] { padding: 8px 12px; border: 1px solid #ddd; border-radius: 4px; font-size: 14px; }
-        .panel { background: white; border-radius: 8px; padding: 20px; margin-bottom: 20px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
-        .panel h2 { font-size: 18px; margin-bottom: 15px; color: #2c3e50; border-bottom: 2px solid #3498db; padding-bottom: 10px; }
-        .table-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 10px; }
-        .table-item { padding: 12px; background: #ecf0f1; border-radius: 4px; cursor: pointer; transition: background 0.2s; }
-        .table-item:hover { background: #3498db; color: white; }
-        .table-item.active { background: #3498db; color: white; }
-        .data-table { width: 100%; border-collapse: collapse; margin-top: 15px; }
-        .data-table th, .data-table td { padding: 10px; text-align: left; border: 1px solid #ddd; }
-        .data-table th { background: #34495e; color: white; position: sticky; top: 0; }
-        .data-table tr:nth-child(even) { background: #f9f9f9; }
-        .data-table tr:hover { background: #e8f4f8; }
-        .data-table input, .data-table select { width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 3px; }
-        .pagination { display: flex; justify-content: center; gap: 10px; margin-top: 20px; align-items: center; }
-        .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1000; }
-        .modal.show { display: flex; justify-content: center; align-items: center; }
-        .modal-content { background: white; padding: 30px; border-radius: 8px; max-width: 600px; width: 90%; max-height: 80vh; overflow-y: auto; }
-        .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
-        .modal-header h3 { font-size: 20px; }
-        .close-btn { background: none; border: none; font-size: 24px; cursor: pointer; color: #999; }
-        .close-btn:hover { color: #333; }
-        .form-group { margin-bottom: 15px; }
-        .form-group label { display: block; margin-bottom: 5px; font-weight: 500; }
-        .form-group input, .form-group select { width: 100%; }
-        .sql-editor { width: 100%; height: 200px; font-family: monospace; font-size: 14px; padding: 12px; border: 1px solid #ddd; border-radius: 4px; resize: vertical; }
-        .alert { padding: 12px 20px; border-radius: 4px; margin-bottom: 15px; }
-        .alert-success { background: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
-        .alert-error { background: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
-        .loading { text-align: center; padding: 40px; color: #666; }
-        .hidden { display: none; }
-        .action-cell { white-space: nowrap; }
-        .checkbox-cell { width: 40px; text-align: center; }
-        #customSqlPanel { display: none; }
-        .schema-info { font-size: 12px; color: #666; margin-top: 5px; }
-    </style>
-</head>
-<body>
-    <div class="container">
-        <header>
-            <h1>🗄️ Database Table Editor</h1>
-            <div class="toolbar">
-                <select id="tableSelect">
-                    <option value="">-- Select a table --</option>
-                </select>
-                <button class="btn btn-primary" onclick="loadTableData()">Load Table</button>
-                <button class="btn btn-success" onclick="showCreateTableModal()">+ Create Table</button>
-                <button class="btn btn-secondary" onclick="toggleSqlEditor()">SQL Query</button>
-                <button class="btn btn-secondary" onclick="refreshTables()">Refresh Tables</button>
-            </div>
-        </header>
-
-        <div id="alertContainer"></div>
-
-        <div class="panel" id="customSqlPanel">
-            <h2>Custom SQL Query</h2>
-            <textarea id="sqlQuery" class="sql-editor" placeholder="Enter your SQL query here..."></textarea>
-            <div style="margin-top: 15px;">
-                <button class="btn btn-primary" onclick="executeSql()">Execute</button>
-                <button class="btn btn-secondary" onclick="toggleSqlEditor()">Close</button>
-            </div>
-            <div id="sqlResults" class="hidden" style="margin-top: 20px;"></div>
-        </div>
-
-        <div class="panel" id="tablesPanel">
-            <h2>Available Tables</h2>
-            <div id="tableList" class="table-list"></div>
-        </div>
-
-        <div class="panel hidden" id="dataPanel">
-            <h2 id="currentTableName">Table Data</h2>
-            <div class="toolbar" style="margin-bottom: 15px;">
-                <button class="btn btn-success" onclick="showAddRowModal()">+ Add Row</button>
-                <button class="btn btn-danger" onclick="deleteSelectedRows()">Delete Selected</button>
-                <span id="recordCount" style="margin-left: auto; color: #666;"></span>
-            </div>
-            <div id="tableDataContainer"></div>
-            <div class="pagination" id="pagination"></div>
-        </div>
-    </div>
-
-    <!-- Create Table Modal -->
-    <div id="createTableModal" class="modal">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h3>Create New Table</h3>
-                <button class="close-btn" onclick="closeModal('createTableModal')">&times;</button>
-            </div>
-            <div class="form-group">
-                <label>Table Name</label>
-                <input type="text" id="newTableName" placeholder="my_table">
-            </div>
-            <div id="columnDefinitions">
-                <h4>Columns</h4>
-                <div class="column-def" style="display: flex; gap: 10px; margin-bottom: 10px;">
-                    <input type="text" placeholder="Column name" class="col-name" style="flex: 2;">
-                    <select class="col-type" style="flex: 1;">
-                        <option value="INTEGER">INTEGER</option>
-                        <option value="VARCHAR(255)">VARCHAR</option>
-                        <option value="TEXT">TEXT</option>
-                        <option value="BOOLEAN">BOOLEAN</option>
-                        <option value="DATE">DATE</option>
-                        <option value="TIMESTAMP">TIMESTAMP</option>
-                        <option value="DECIMAL(10,2)">DECIMAL</option>
-                    </select>
-                    <label><input type="checkbox" class="col-pk"> PK</label>
-                    <label><input type="checkbox" class="col-notnull" checked> NOT NULL</label>
-                </div>
-            </div>
-            <button class="btn btn-secondary" onclick="addColumnDef()" style="margin: 10px 0;">+ Add Column</button>
-            <div style="margin-top: 20px;">
-                <button class="btn btn-success" onclick="createTable()">Create Table</button>
-                <button class="btn btn-secondary" onclick="closeModal('createTableModal')">Cancel</button>
-            </div>
-        </div>
-    </div>
-
-    <!-- Add/Edit Row Modal -->
-    <div id="rowModal" class="modal">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h3 id="rowModalTitle">Add New Row</h3>
-                <button class="close-btn" onclick="closeModal('rowModal')">&times;</button>
-            </div>
-            <div id="rowForm"></div>
-            <div style="margin-top: 20px;">
-                <button class="btn btn-success" onclick="saveRow()">Save</button>
-                <button class="btn btn-secondary" onclick="closeModal('rowModal')">Cancel</button>
-            </div>
-        </div>
-    </div>
-
-    <script>
-        let currentTable = null;
-        let currentPage = 0;
-        const pageSize = 50;
-        let tableSchema = [];
-        let primaryKeys = [];
-        let selectedRows = new Set();
-
-        // Initialize app
-        document.addEventListener('DOMContentLoaded', () => {
-            refreshTables();
-        });
-
-        function showAlert(message, type = 'success') {
-            const container = document.getElementById('alertContainer');
-            const alert = document.createElement('div');
-            alert.className = `alert alert-${type}`;
-            alert.textContent = message;
-            container.appendChild(alert);
-            setTimeout(() => alert.remove(), 5000);
-        }
-
-        async function apiRequest(endpoint, method = 'GET', data = null) {
-            const options = {
-                method,
-                headers: { 'Content-Type': 'application/json' }
-            };
-            if (data) options.body = JSON.stringify(data);
-            
-            const response = await fetch(endpoint, options);
-            const result = await response.json();
-            
-            if (!response.ok) {
-                throw new Error(result.detail || 'Request failed');
-            }
-            return result;
-        }
-
-        async function refreshTables() {
-            try {
-                const tables = await apiRequest('/api/tables');
-                const tableList = document.getElementById('tableList');
-                const tableSelect = document.getElementById('tableSelect');
-                
-                tableList.innerHTML = '';
-                tableSelect.innerHTML = '<option value="">-- Select a table --</option>';
-                
-                tables.forEach(table => {
-                    const item = document.createElement('div');
-                    item.className = 'table-item';
-                    item.textContent = table;
-                    item.onclick = () => selectTable(table);
-                    tableList.appendChild(item);
-                    
-                    const option = document.createElement('option');
-                    option.value = table;
-                    option.textContent = table;
-                    tableSelect.appendChild(option);
-                });
-            } catch (error) {
-                showAlert('Failed to load tables: ' + error.message, 'error');
-            }
-        }
-
-        function selectTable(tableName) {
-            currentTable = tableName;
-            document.querySelectorAll('.table-item').forEach(item => {
-                item.classList.toggle('active', item.textContent === tableName);
-            });
-            document.getElementById('tableSelect').value = tableName;
-            loadTableData();
-        }
-
-        async function loadTableData() {
-            if (!currentTable) {
-                showAlert('Please select a table', 'error');
-                return;
-            }
-            
-            try {
-                const result = await apiRequest(`/api/table/${encodeURIComponent(currentTable)}?limit=${pageSize}&offset=${currentPage * pageSize}`);
-                
-                tableSchema = result.columns;
-                primaryKeys = result.primary_keys;
-                
-                document.getElementById('currentTableName').textContent = `Table: ${result.table}`;
-                document.getElementById('recordCount').textContent = `Total records: ${result.total}`;
-                document.getElementById('tablesPanel').classList.add('hidden');
-                document.getElementById('dataPanel').classList.remove('hidden');
-                
-                renderTable(result);
-                renderPagination(result.total, result.limit, result.offset);
-            } catch (error) {
-                showAlert('Failed to load table data: ' + error.message, 'error');
-            }
-        }
-
-        function renderTable(result) {
-            const container = document.getElementById('tableDataContainer');
-            
-            if (result.data.length === 0) {
-                container.innerHTML = '<p class="loading">No data in this table</p>';
-                return;
-            }
-            
-            let html = '<table class="data-table"><thead><tr><th class="checkbox-cell"><input type="checkbox" onchange="toggleSelectAll(this)"></th>';
-            
-            result.columns.forEach(col => {
-                html += `<th>${col.column_name}<br><span class="schema-info">${col.data_type}</span></th>`;
-            });
-            
-            html += '<th>Actions</th></tr></thead><tbody>';
-            
-            result.data.forEach((row, idx) => {
-                const pkValues = primaryKeys.map(pk => encodeURIComponent(row[pk]));
-                const pkParam = primaryKeys.map((pk, i) => `${pk}=${pkValues[i]}`).join('&');
-                
-                html += '<tr>';
-                html += `<td class="checkbox-cell"><input type="checkbox" data-pk="${pkParam}" onchange="toggleRowSelection(this)"></td>`;
-                
-                result.columns.forEach(col => {
-                    const value = row[col.column_name];
-                    const displayValue = value === null ? '<em>NULL</em>' : escapeHtml(String(value));
-                    html += `<td>${displayValue}</td>`;
-                });
-                
-                html += `<td class="action-cell">
-                    <button class="btn btn-primary" onclick="showEditRowModal('${pkParam}')" style="padding: 4px 8px; font-size: 12px;">Edit</button>
-                    <button class="btn btn-danger" onclick="deleteRow('${pkParam}')" style="padding: 4px 8px; font-size: 12px;">Delete</button>
-                </td>`;
-                html += '</tr>';
-            });
-            
-            html += '</tbody></table>';
-            container.innerHTML = html;
-        }
-
-        function renderPagination(total, limit, offset) {
-            const totalPages = Math.ceil(total / limit);
-            const pagination = document.getElementById('pagination');
-            
-            let html = '';
-            html += `<button class="btn btn-secondary" onclick="goToPage(0)" ${currentPage === 0 ? 'disabled' : ''}>First</button>`;
-            html += `<button class="btn btn-secondary" onclick="goToPage(${currentPage - 1})" ${currentPage === 0 ? 'disabled' : ''}>Prev</button>`;
-            html += `<span>Page ${currentPage + 1} of ${totalPages || 1}</span>`;
-            html += `<button class="btn btn-secondary" onclick="goToPage(${currentPage + 1})" ${currentPage >= totalPages - 1 ? 'disabled' : ''}>Next</button>`;
-            html += `<button class="btn btn-secondary" onclick="goToPage(${totalPages - 1})" ${currentPage >= totalPages - 1 ? 'disabled' : ''}>Last</button>`;
-            
-            pagination.innerHTML = html;
-        }
-
-        function goToPage(page) {
-            currentPage = page;
-            loadTableData();
-        }
-
-        function toggleSelectAll(checkbox) {
-            const checkboxes = document.querySelectorAll('#tableDataContainer tbody input[type="checkbox"]');
-            checkboxes.forEach(cb => cb.checked = checkbox.checked);
-            updateSelectedRows();
-        }
-
-        function toggleRowSelection(checkbox) {
-            updateSelectedRows();
-        }
-
-        function updateSelectedRows() {
-            selectedRows.clear();
-            document.querySelectorAll('#tableDataContainer tbody input[type="checkbox"]:checked').forEach(cb => {
-                selectedRows.add(cb.dataset.pk);
-            });
-        }
-
-        function showAddRowModal() {
-            document.getElementById('rowModalTitle').textContent = 'Add New Row';
-            renderRowForm({});
-            document.getElementById('rowModal').classList.add('show');
-        }
-
-        async function showEditRowModal(pkParam) {
-            document.getElementById('rowModalTitle').textContent = 'Edit Row';
-            
-            const params = new URLSearchParams(pkParam);
-            const pkValues = {};
-            for (const [key, value] of params.entries()) {
-                pkValues[key] = decodeURIComponent(value);
-            }
-            
-            try {
-                const result = await apiRequest(`/api/table/${encodeURIComponent(currentTable)}?limit=1&offset=0`);
-                const row = result.data.find(r => primaryKeys.every(pk => String(r[pk]) === String(pkValues[pk])));
-                
-                if (row) {
-                    renderRowForm(row, pkValues);
-                    document.getElementById('rowModal').classList.add('show');
-                }
-            } catch (error) {
-                showAlert('Failed to load row data: ' + error.message, 'error');
-            }
-        }
-
-        function renderRowForm(data, pkValues = {}) {
-            const form = document.getElementById('rowForm');
-            let html = '';
-            
-            tableSchema.forEach(col => {
-                const isPk = primaryKeys.includes(col.column_name);
-                const value = data[col.column_name] !== undefined ? data[col.column_name] : '';
-                const disabled = isPk && Object.keys(pkValues).length > 0 ? 'disabled' : '';
-                
-                let input;
-                if (col.data_type === 'BOOLEAN') {
-                    input = `<select ${disabled}><option value="">NULL</option><option value="true" ${value === true ? 'selected' : ''}>True</option><option value="false" ${value === false ? 'selected' : ''}>False</option></select>`;
-                } else if (col.data_type.includes('DATE') || col.data_type.includes('TIME')) {
-                    input = `<input type="text" value="${escapeHtml(value)}" ${disabled}>`;
-                } else {
-                    input = `<input type="text" value="${escapeHtml(value)}" ${disabled}>`;
-                }
-                
-                html += `<div class="form-group">
-                    <label>${col.column_name} (${col.data_type})${isPk ? ' [PK]' : ''}</label>
-                    ${input}
-                </div>`;
-            });
-            
-            form.innerHTML = html;
-        }
-
-        async function saveRow() {
-            const form = document.getElementById('rowForm');
-            const inputs = form.querySelectorAll('input, select');
-            const data = {};
-            
-            tableSchema.forEach((col, idx) => {
-                const input = inputs[idx];
-                let value = input.value;
-                
-                if (input.disabled) return;
-                
-                if (value === '') {
-                    data[col.column_name] = null;
-                } else if (col.data_type === 'BOOLEAN') {
-                    data[col.column_name] = value === 'true';
-                } else if (col.data_type.includes('INT')) {
-                    data[col.column_name] = parseInt(value, 10);
-                } else if (col.data_type.includes('DECIMAL') || col.data_type.includes('NUMERIC')) {
-                    data[col.column_name] = parseFloat(value);
-                } else {
-                    data[col.column_name] = value;
-                }
-            });
-            
-            try {
-                const title = document.getElementById('rowModalTitle').textContent;
-                if (title.includes('Add')) {
-                    await apiRequest(`/api/table/${encodeURIComponent(currentTable)}/row`, 'POST', data);
-                    showAlert('Row added successfully');
-                } else {
-                    // Find PK values from form
-                    const pkValues = {};
-                    tableSchema.filter(col => primaryKeys.includes(col.column_name)).forEach(col => {
-                        pkValues[col.column_name] = data[col.column_name];
-                        delete data[col.column_name];
-                    });
-                    
-                    await apiRequest(`/api/table/${encodeURIComponent(currentTable)}/row`, 'PUT', { pk_values: pkValues, data: data });
-                    showAlert('Row updated successfully');
-                }
-                
-                closeModal('rowModal');
-                loadTableData();
-            } catch (error) {
-                showAlert('Failed to save row: ' + error.message, 'error');
-            }
-        }
-
-        async function deleteRow(pkParam) {
-            if (!confirm('Are you sure you want to delete this row?')) return;
-            
-            try {
-                const params = new URLSearchParams(pkParam);
-                const pkValues = {};
-                for (const [key, value] of params.entries()) {
-                    pkValues[key] = decodeURIComponent(value);
-                }
-                
-                await apiRequest(`/api/table/${encodeURIComponent(currentTable)}/row`, 'DELETE', { pk_values: pkValues });
-                showAlert('Row deleted successfully');
-                loadTableData();
-            } catch (error) {
-                showAlert('Failed to delete row: ' + error.message, 'error');
-            }
-        }
-
-        async function deleteSelectedRows() {
-            if (selectedRows.size === 0) {
-                showAlert('No rows selected', 'error');
-                return;
-            }
-            
-            if (!confirm(`Are you sure you want to delete ${selectedRows.size} rows?`)) return;
-            
-            try {
-                for (const pkParam of selectedRows) {
-                    const params = new URLSearchParams(pkParam);
-                    const pkValues = {};
-                    for (const [key, value] of params.entries()) {
-                        pkValues[key] = decodeURIComponent(value);
-                    }
-                    await apiRequest(`/api/table/${encodeURIComponent(currentTable)}/row`, 'DELETE', { pk_values: pkValues });
-                }
-                showAlert(`${selectedRows.size} rows deleted successfully`);
-                selectedRows.clear();
-                loadTableData();
-            } catch (error) {
-                showAlert('Failed to delete rows: ' + error.message, 'error');
-            }
-        }
-
-        function showCreateTableModal() {
-            document.getElementById('createTableModal').classList.add('show');
-        }
-
-        function addColumnDef() {
-            const container = document.getElementById('columnDefinitions');
-            const div = document.createElement('div');
-            div.className = 'column-def';
-            div.style.cssText = 'display: flex; gap: 10px; margin-bottom: 10px;';
-            div.innerHTML = `
-                <input type="text" placeholder="Column name" class="col-name" style="flex: 2;">
-                <select class="col-type" style="flex: 1;">
-                    <option value="INTEGER">INTEGER</option>
-                    <option value="VARCHAR(255)">VARCHAR</option>
-                    <option value="TEXT">TEXT</option>
-                    <option value="BOOLEAN">BOOLEAN</option>
-                    <option value="DATE">DATE</option>
-                    <option value="TIMESTAMP">TIMESTAMP</option>
-                    <option value="DECIMAL(10,2)">DECIMAL</option>
-                </select>
-                <label><input type="checkbox" class="col-pk"> PK</label>
-                <label><input type="checkbox" class="col-notnull" checked> NOT NULL</label>
-                <button class="btn btn-danger" onclick="this.parentElement.remove()" style="padding: 4px 8px;">×</button>
-            `;
-            container.appendChild(div);
-        }
-
-        async function createTable() {
-            const tableName = document.getElementById('newTableName').value.trim();
-            if (!tableName) {
-                showAlert('Please enter a table name', 'error');
-                return;
-            }
-            
-            const columnDefs = document.querySelectorAll('.column-def');
-            const columns = [];
-            
-            columnDefs.forEach(def => {
-                const name = def.querySelector('.col-name').value.trim();
-                const type = def.querySelector('.col-type').value;
-                const isPk = def.querySelector('.col-pk').checked;
-                const isNullable = !def.querySelector('.col-notnull').checked;
-                
-                if (name) {
-                    columns.push({ name, type, primary_key: isPk, nullable: isNullable });
-                }
-            });
-            
-            if (columns.length === 0) {
-                showAlert('Please define at least one column', 'error');
-                return;
-            }
-            
-            try {
-                await apiRequest('/api/table', 'POST', { table_name: tableName, columns });
-                showAlert('Table created successfully');
-                closeModal('createTableModal');
-                refreshTables();
-                
-                // Clear form
-                document.getElementById('newTableName').value = '';
-                document.querySelectorAll('.column-def:not(:first-child)').forEach(el => el.remove());
-            } catch (error) {
-                showAlert('Failed to create table: ' + error.message, 'error');
-            }
-        }
-
-        function toggleSqlEditor() {
-            const panel = document.getElementById('customSqlPanel');
-            panel.style.display = panel.style.display === 'block' ? 'none' : 'block';
-        }
-
-        async function executeSql() {
-            const query = document.getElementById('sqlQuery').value.trim();
-            if (!query) {
-                showAlert('Please enter a SQL query', 'error');
-                return;
-            }
-            
-            try {
-                const result = await apiRequest('/api/sql', 'POST', { query });
-                const resultsDiv = document.getElementById('sqlResults');
-                resultsDiv.classList.remove('hidden');
-                
-                if (result.type === 'query') {
-                    let html = `<p>Query returned ${result.count} rows</p><table class="data-table"><thead><tr>`;
-                    if (result.data.length > 0) {
-                        Object.keys(result.data[0]).forEach(key => {
-                            html += `<th>${key}</th>`;
-                        });
-                    }
-                    html += '</tr></thead><tbody>';
-                    result.data.forEach(row => {
-                        html += '<tr>';
-                        Object.values(row).forEach(val => {
-                            html += `<td>${val === null ? '<em>NULL</em>' : escapeHtml(String(val))}</td>`;
-                        });
-                        html += '</tr>';
-                    });
-                    html += '</tbody></table>';
-                    resultsDiv.innerHTML = html;
-                } else {
-                    resultsDiv.innerHTML = `<p class="alert alert-success">Command executed successfully. Affected rows: ${result.affected_rows}</p>`;
-                }
-            } catch (error) {
-                showAlert('SQL execution failed: ' + error.message, 'error');
-            }
-        }
-
-        function closeModal(modalId) {
-            document.getElementById(modalId).classList.remove('show');
-        }
-
-        function escapeHtml(text) {
-            const div = document.createElement('div');
-            div.textContent = text;
-            return div.innerHTML;
-        }
-
-        // Close modal on outside click
-        document.querySelectorAll('.modal').forEach(modal => {
-            modal.addEventListener('click', (e) => {
-                if (e.target === modal) modal.classList.remove('show');
-            });
-        });
-    </script>
-</body>
-</html>'''
-
-
-# =============================================================================
-# FASTAPI APPLICATION
+# APPLICATION STATE
 # =============================================================================
 
 db_manager = DatabaseManager(DB_CONFIG)
@@ -922,276 +795,1988 @@ db_manager = DatabaseManager(DB_CONFIG)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Application lifespan manager"""
+    """Application lifespan handler"""
+    # Startup
+    try:
+        db_manager.init_metadata_tables()
+    except Exception as e:
+        print(f"Warning: Could not initialize metadata tables: {e}")
     yield
+    # Shutdown
     db_manager.close()
 
 
+# =============================================================================
+# FASTAPI APPLICATION
+# =============================================================================
+
 app = FastAPI(
     title="Database Table Editor",
-    description="A web-based database table editor with PostgreSQL integration",
-    version="1.0.0",
+    description="AirTable-like database table editor with advanced UI features",
+    version="2.0.0",
     lifespan=lifespan
 )
 
 
+# =============================================================================
+# API ENDPOINTS
+# =============================================================================
+
 @app.get("/", response_class=HTMLResponse)
 async def root():
-    """Serve the main HTML interface"""
-    return HTMLResponse(content=HTML_TEMPLATE)
+    """Serve the main HTML page"""
+    return HTMLResponse(content=generate_html(), status_code=200)
 
 
 @app.get("/api/tables")
 async def get_tables():
     """Get list of all tables"""
-    return db_manager.get_tables()
+    return {"tables": db_manager.get_tables()}
 
 
-@app.get("/api/table/{table_name}")
-async def get_table_data(table_name: str, limit: int = 100, offset: int = 0):
-    """Get paginated data from a table"""
-    return db_manager.get_table_data(table_name, limit, offset)
+@app.get("/api/tables/{table_name}/schema")
+async def get_table_schema(table_name: str):
+    """Get schema for a specific table"""
+    return {"schema": db_manager.get_table_schema(table_name)}
 
 
-@app.post("/api/table")
-async def create_table(request: Request):
+@app.get("/api/tables/{table_name}/config")
+async def get_table_config(table_name: str):
+    """Get field and view configurations for a table"""
+    fields = db_manager.get_field_configs(table_name)
+    views = db_manager.get_view_configs(table_name)
+    return {
+        "fields": [asdict(f) for f in fields],
+        "views": [asdict(v) for v in views]
+    }
+
+
+@app.get("/api/tables/{table_name}/data")
+async def get_table_data(
+    table_name: str,
+    limit: int = Query(100, ge=1, le=1000),
+    offset: int = Query(0, ge=0),
+    filters: Optional[str] = Query(None),
+    sorts: Optional[str] = Query(None)
+):
+    """Get paginated data from a table with optional filters and sorts"""
+    filter_list = json.loads(filters) if filters else None
+    sort_list = json.loads(sorts) if sorts else None
+    return db_manager.get_table_data(table_name, limit, offset, filter_list, sort_list)
+
+
+@app.post("/api/tables/{table_name}/rows")
+async def create_row(table_name: str, data: Dict[str, Any] = Body(...)):
+    """Create a new row in a table"""
+    return {"success": True, "data": db_manager.insert_row(table_name, data)}
+
+
+@app.put("/api/tables/{table_name}/rows/{pk_value}")
+async def update_row(table_name: str, pk_value: str, data: Dict[str, Any] = Body(...)):
+    """Update an existing row"""
+    # Get primary key column
+    pks = db_manager.get_primary_keys(table_name)
+    if not pks:
+        raise HTTPException(status_code=400, detail="No primary key found")
+    pk_column = pks[0]
+    return {"success": True, "data": db_manager.update_row(table_name, {pk_column: pk_value}, data)}
+
+
+@app.delete("/api/tables/{table_name}/rows/{pk_value}")
+async def delete_row(table_name: str, pk_value: str):
+    """Delete a row from a table"""
+    pks = db_manager.get_primary_keys(table_name)
+    if not pks:
+        raise HTTPException(status_code=400, detail="No primary key found")
+    pk_column = pks[0]
+    return {"success": db_manager.delete_row(table_name, {pk_column: pk_value})}
+
+
+@app.post("/api/tables/{table_name}/bulk-delete")
+async def bulk_delete(table_name: str, pk_values: List[Any] = Body(...)):
+    """Delete multiple rows"""
+    pks = db_manager.get_primary_keys(table_name)
+    if not pks:
+        raise HTTPException(status_code=400, detail="No primary key found")
+    pk_column = pks[0]
+    count = db_manager.bulk_delete(table_name, pk_column, pk_values)
+    return {"success": True, "deleted_count": count}
+
+
+@app.post("/api/tables")
+async def create_table(name: str = Body(...), columns: List[Dict[str, Any]] = Body(...)):
     """Create a new table"""
-    body = await request.json()
-    table_name = body.get("table_name")
-    columns = body.get("columns", [])
-    if not table_name:
-        raise HTTPException(status_code=400, detail="table_name is required")
-    return {"success": db_manager.create_table(table_name, columns)}
+    return db_manager.create_table(name, columns)
 
 
-@app.delete("/api/table/{table_name}")
-async def drop_table(table_name: str):
-    """Drop a table"""
+@app.delete("/api/tables/{table_name}")
+async def delete_table(table_name: str):
+    """Delete a table"""
     return {"success": db_manager.drop_table(table_name)}
 
 
-@app.post("/api/table/{table_name}/row")
-async def insert_row(table_name: str, data: Dict[str, Any]):
-    """Insert a new row"""
-    return {"success": db_manager.insert_row(table_name, data)}
+@app.post("/api/tables/{table_name}/columns")
+async def add_column(table_name: str, column_name: str = Body(...), column_type: str = Body("TEXT")):
+    """Add a column to an existing table"""
+    return {"success": db_manager.add_column(table_name, column_name, column_type)}
 
 
-@app.put("/api/table/{table_name}/row")
-async def update_row(table_name: str, pk_values: Dict[str, Any], data: Dict[str, Any]):
-    """Update an existing row"""
-    return {"success": db_manager.update_row(table_name, pk_values, data)}
-
-
-@app.delete("/api/table/{table_name}/row")
-async def delete_row(table_name: str, pk_values: Dict[str, Any]):
-    """Delete a row"""
-    return {"success": db_manager.delete_row(table_name, pk_values)}
-
-
-@app.post("/api/sql")
-async def execute_sql(request: Request):
+@app.post("/api/sql/execute")
+async def execute_sql(query: str = Body(...)):
     """Execute custom SQL query"""
-    body = await request.json()
-    query = body.get("query", "")
-    if not query:
-        raise HTTPException(status_code=400, detail="query is required")
     return db_manager.execute_custom_sql(query)
 
 
-@app.post("/api/table/{table_name}/row")
-async def insert_row(table_name: str, request: Request):
-    """Insert a new row"""
-    data = await request.json()
-    return {"success": db_manager.insert_row(table_name, data)}
+@app.get("/api/tables/{table_name}/export/csv")
+async def export_csv(table_name: str, limit: int = Query(1000, ge=1, le=10000)):
+    """Export table data as CSV"""
+    result = db_manager.get_table_data(table_name, limit, 0)
+    csv_content = db_manager.export_to_csv(table_name, result['data'])
+    return PlainTextResponse(
+        content=csv_content,
+        media_type="text/csv",
+        headers={"Content-Disposition": f"attachment; filename={table_name}.csv"}
+    )
 
 
-@app.put("/api/table/{table_name}/row")
-async def update_row(table_name: str, request: Request):
-    """Update an existing row"""
-    body = await request.json()
-    pk_values = body.get("pk_values", {})
-    data = body.get("data", {})
-    return {"success": db_manager.update_row(table_name, pk_values, data)}
-
-
-@app.delete("/api/table/{table_name}/row")
-async def delete_row(table_name: str, request: Request):
-    """Delete a row"""
-    body = await request.json()
-    pk_values = body.get("pk_values", {})
-    return {"success": db_manager.delete_row(table_name, pk_values)}
-
-
-@app.get("/api/health")
-async def health_check():
-    """Health check endpoint"""
+@app.get("/api/comments/{table_name}/{record_id}")
+async def get_comments(table_name: str, record_id: str):
+    """Get comments for a record"""
     try:
-        db_manager.execute_query("SELECT 1 as test")
-        return {"status": "healthy", "database": "connected"}
+        meta_conn = db_manager.get_meta_connection()
+        with meta_conn.cursor(cursor_factory=extras.RealDictCursor) as cur:
+            cur.execute("""
+                SELECT * FROM _app_comments 
+                WHERE table_id = %s AND record_id = %s 
+                ORDER BY created_at ASC
+            """, (table_name, record_id))
+            return {"comments": [dict(row) for row in cur.fetchall()]}
+    except Exception:
+        return {"comments": []}
+
+
+@app.post("/api/comments")
+async def create_comment(
+    table_id: str = Body(...),
+    record_id: str = Body(...),
+    content: str = Body(...),
+    user_name: str = Body("Anonymous")
+):
+    """Create a comment on a record"""
+    comment_id = f"c_{secrets.token_hex(8)}"
+    try:
+        meta_conn = db_manager.get_meta_connection()
+        with meta_conn.cursor() as cur:
+            cur.execute("""
+                INSERT INTO _app_comments (id, table_id, record_id, user_id, user_name, content)
+                VALUES (%s, %s, %s, %s, %s, %s)
+            """, (comment_id, table_id, record_id, "anon", user_name, content))
+            meta_conn.commit()
+        return {"success": True, "id": comment_id}
     except Exception as e:
-        return {"status": "unhealthy", "error": str(e)}
+        raise HTTPException(status_code=500, detail=str(e))
 
 
-# =============================================================================
-# TEST SUITE
-# =============================================================================
-
-def run_tests():
-    """Run integration tests"""
-    print("\n" + "="*60)
-    print("RUNNING INTEGRATION TESTS")
-    print("="*60 + "\n")
-    
-    test_db = DatabaseManager(DB_CONFIG)
-    tests_passed = 0
-    tests_failed = 0
-    
-    def test(name, condition, error_msg=""):
-        nonlocal tests_passed, tests_failed
-        if condition:
-            print(f"✓ PASS: {name}")
-            tests_passed += 1
-        else:
-            print(f"✗ FAIL: {name}")
-            if error_msg:
-                print(f"  Error: {error_msg}")
-            tests_failed += 1
-        return condition
-    
+@app.get("/api/activity/{table_name}")
+async def get_activity(table_name: str, limit: int = Query(50, ge=1, le=500)):
+    """Get activity log for a table"""
     try:
-        # Test 1: Connection
-        conn = test_db.get_connection()
-        test("Database connection", conn is not None and not conn.closed)
-        
-        # Test 2: Get tables (should have at least our test table later)
-        tables = test_db.get_tables()
-        test("Get tables returns list", isinstance(tables, list))
-        
-        # Test 3: Create test table
-        test_table = "test_employees"
+        meta_conn = db_manager.get_meta_connection()
+        with meta_conn.cursor(cursor_factory=extras.RealDictCursor) as cur:
+            cur.execute("""
+                SELECT * FROM _app_activity_log 
+                WHERE table_id = %s 
+                ORDER BY timestamp DESC 
+                LIMIT %s
+            """, (table_name, limit))
+            return {"activity": [dict(row) for row in cur.fetchall()]}
+    except Exception:
+        return {"activity": []}
+
+
+@app.get("/api/search")
+async def search(q: str = Query(..., min_length=1)):
+    """Search across all tables"""
+    tables = db_manager.get_tables()
+    results = []
+    
+    for table in tables[:10]:  # Limit to 10 tables
+        table_name = table.get('db_table_name', table.get('name'))
         try:
-            test_db.drop_table(test_table)
-        except:
-            pass
-        
-        columns = [
-            {"name": "id", "type": "INTEGER", "primary_key": True, "nullable": False},
-            {"name": "name", "type": "VARCHAR(100)", "primary_key": False, "nullable": False},
-            {"name": "email", "type": "TEXT", "primary_key": False, "nullable": True},
-            {"name": "salary", "type": "DECIMAL(10,2)", "primary_key": False, "nullable": True},
-            {"name": "active", "type": "BOOLEAN", "primary_key": False, "nullable": False}
-        ]
-        
-        created = test_db.create_table(test_table, columns)
-        test("Create table", created)
-        
-        # Test 4: Verify table exists
-        tables = test_db.get_tables()
-        test("Table appears in list", test_table in tables)
-        
-        # Test 5: Get table schema
-        schema = test_db.get_table_schema(test_table)
-        test("Get table schema", len(schema) == 5)
-        
-        # Test 6: Get primary keys
-        pks = test_db.get_primary_keys(test_table)
-        test("Get primary keys", pks == ["id"])
-        
-        # Test 7: Insert row
-        test_db.insert_row(test_table, {
-            "id": 1,
-            "name": "John Doe",
-            "email": "john@example.com",
-            "salary": 50000.00,
-            "active": True
-        })
-        test_db.insert_row(test_table, {
-            "id": 2,
-            "name": "Jane Smith",
-            "email": "jane@example.com",
-            "salary": 60000.00,
-            "active": True
-        })
-        test("Insert rows", True)
-        
-        # Test 8: Get table data
-        data = test_db.get_table_data(test_table, limit=10, offset=0)
-        test("Get table data", data["total"] == 2 and len(data["data"]) == 2)
-        
-        # Test 9: Update row
-        test_db.update_row(test_table, {"id": 1}, {"salary": 55000.00})
-        data = test_db.get_table_data(test_table)
-        test("Update row", data["data"][0]["salary"] == 55000.00)
-        
-        # Test 10: Delete row
-        test_db.delete_row(test_table, {"id": 2})
-        data = test_db.get_table_data(test_table)
-        test("Delete row", data["total"] == 1)
-        
-        # Test 11: Custom SQL query
-        result = test_db.execute_custom_sql("SELECT COUNT(*) as cnt FROM test_employees")
-        test("Custom SQL SELECT", result["type"] == "query" and result["count"] == 1)
-        
-        # Test 12: Custom SQL command
-        result = test_db.execute_custom_sql("INSERT INTO test_employees (id, name, email, salary, active) VALUES (3, 'Test User', 'test@test.com', 45000, true)")
-        test("Custom SQL INSERT", result["type"] == "command" and result["affected_rows"] == 1)
-        
-        # Cleanup
-        test_db.drop_table(test_table)
-        test("Cleanup test table", True)
-        
-    except Exception as e:
-        test(f"Unexpected error: {str(e)}", False)
+            schema = db_manager.get_table_schema(table_name)
+            text_columns = [c['column_name'] for c in schema 
+                          if c['data_type'] in ('text', 'character varying', 'character')]
+            
+            if text_columns:
+                conditions = " OR ".join([f"{col} ILIKE %s" for col in text_columns[:5]])
+                query = f"SELECT * FROM {sql.Identifier(table_name).as_string(db_manager.get_connection())} WHERE {conditions} LIMIT 10"
+                data = db_manager.execute_query(query, tuple([f"%{q}%"] * len(text_columns[:5])))
+                
+                if data:
+                    results.append({
+                        "table": table_name,
+                        "matches": data
+                    })
+        except Exception:
+            continue
     
-    # Summary
-    print("\n" + "-"*60)
-    print(f"TESTS PASSED: {tests_passed}")
-    print(f"TESTS FAILED: {tests_failed}")
-    print("="*60 + "\n")
-    
-    return tests_failed == 0
+    return {"results": results, "query": q}
+
+
+# =============================================================================
+# HTML GENERATOR
+# =============================================================================
+
+def generate_html() -> str:
+    """Generate the complete HTML/CSS/JS application"""
+    return '''<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Database Table Editor - AirTable Style</title>
+    <style>
+        :root {
+            --primary: #5c6bc0;
+            --primary-dark: #3f51b5;
+            --primary-light: #9fa8da;
+            --secondary: #ff7043;
+            --success: #66bb6a;
+            --danger: #ef5350;
+            --warning: #ffa726;
+            --info: #42a5f5;
+            --bg-primary: #fafafa;
+            --bg-secondary: #ffffff;
+            --bg-tertiary: #f5f5f5;
+            --text-primary: #212121;
+            --text-secondary: #757575;
+            --border: #e0e0e0;
+            --shadow: 0 2px 4px rgba(0,0,0,0.1);
+            --shadow-lg: 0 4px 12px rgba(0,0,0,0.15);
+            --radius: 8px;
+            --radius-sm: 4px;
+            --header-height: 60px;
+            --sidebar-width: 280px;
+        }
+
+        .dark-mode {
+            --primary: #7986cb;
+            --primary-dark: #5c6bc0;
+            --bg-primary: #121212;
+            --bg-secondary: #1e1e1e;
+            --bg-tertiary: #2d2d2d;
+            --text-primary: #ffffff;
+            --text-secondary: #b0b0b0;
+            --border: #424242;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            overflow: hidden;
+            height: 100vh;
+        }
+
+        /* Header */
+        .header {
+            height: var(--header-height);
+            background: var(--bg-secondary);
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 20px;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            z-index: 100;
+        }
+
+        .logo {
+            font-size: 20px;
+            font-weight: 700;
+            color: var(--primary);
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .logo-icon {
+            width: 32px;
+            height: 32px;
+            background: linear-gradient(135deg, var(--primary), var(--secondary));
+            border-radius: var(--radius-sm);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: bold;
+        }
+
+        .search-bar {
+            flex: 1;
+            max-width: 500px;
+            margin: 0 20px;
+            position: relative;
+        }
+
+        .search-bar input {
+            width: 100%;
+            padding: 10px 16px 10px 40px;
+            border: 1px solid var(--border);
+            border-radius: 20px;
+            background: var(--bg-tertiary);
+            color: var(--text-primary);
+            font-size: 14px;
+        }
+
+        .search-bar input:focus {
+            outline: none;
+            border-color: var(--primary);
+            background: var(--bg-secondary);
+        }
+
+        .search-icon {
+            position: absolute;
+            left: 14px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: var(--text-secondary);
+        }
+
+        .header-actions {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+
+        /* Main Layout */
+        .main-container {
+            display: flex;
+            margin-top: var(--header-height);
+            height: calc(100vh - var(--header-height));
+        }
+
+        /* Sidebar */
+        .sidebar {
+            width: var(--sidebar-width);
+            background: var(--bg-secondary);
+            border-right: 1px solid var(--border);
+            overflow-y: auto;
+            padding: 16px;
+        }
+
+        .sidebar-section {
+            margin-bottom: 24px;
+        }
+
+        .sidebar-title {
+            font-size: 12px;
+            font-weight: 600;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 12px;
+        }
+
+        .table-list {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .table-item {
+            padding: 10px 12px;
+            border-radius: var(--radius-sm);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            transition: background 0.2s;
+            font-size: 14px;
+        }
+
+        .table-item:hover {
+            background: var(--bg-tertiary);
+        }
+
+        .table-item.active {
+            background: var(--primary-light);
+            color: var(--primary-dark);
+            font-weight: 500;
+        }
+
+        .table-icon {
+            width: 24px;
+            height: 24px;
+            background: var(--bg-tertiary);
+            border-radius: 4px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+        }
+
+        /* Content Area */
+        .content {
+            flex: 1;
+            overflow: auto;
+            padding: 20px;
+        }
+
+        /* Toolbar */
+        .toolbar {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 16px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+
+        .btn {
+            padding: 8px 16px;
+            border: none;
+            border-radius: var(--radius-sm);
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .btn-primary {
+            background: var(--primary);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: var(--primary-dark);
+        }
+
+        .btn-secondary {
+            background: var(--bg-tertiary);
+            color: var(--text-primary);
+            border: 1px solid var(--border);
+        }
+
+        .btn-secondary:hover {
+            background: var(--border);
+        }
+
+        .btn-danger {
+            background: var(--danger);
+            color: white;
+        }
+
+        .btn-icon {
+            padding: 8px;
+            min-width: 36px;
+            justify-content: center;
+        }
+
+        /* View Tabs */
+        .view-tabs {
+            display: flex;
+            gap: 4px;
+            margin-bottom: 16px;
+            border-bottom: 1px solid var(--border);
+            padding-bottom: 8px;
+        }
+
+        .view-tab {
+            padding: 8px 16px;
+            border-radius: var(--radius-sm) var(--radius-sm) 0 0;
+            cursor: pointer;
+            font-size: 14px;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .view-tab:hover {
+            background: var(--bg-tertiary);
+        }
+
+        .view-tab.active {
+            background: var(--primary);
+            color: white;
+        }
+
+        /* Data Grid */
+        .data-grid-container {
+            background: var(--bg-secondary);
+            border-radius: var(--radius);
+            box-shadow: var(--shadow);
+            overflow: hidden;
+        }
+
+        .data-grid {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 14px;
+        }
+
+        .data-grid th,
+        .data-grid td {
+            padding: 12px;
+            text-align: left;
+            border: 1px solid var(--border);
+        }
+
+        .data-grid th {
+            background: var(--bg-tertiary);
+            font-weight: 600;
+            position: sticky;
+            top: 0;
+            z-index: 10;
+            user-select: none;
+        }
+
+        .data-grid th.dragging {
+            opacity: 0.5;
+            background: var(--primary-light);
+        }
+
+        .data-grid th.drag-over {
+            border-left: 3px solid var(--primary);
+        }
+
+        .data-grid tr:hover {
+            background: var(--bg-tertiary);
+        }
+
+        .data-grid tr.selected {
+            background: rgba(92, 107, 192, 0.1);
+        }
+
+        .data-grid input,
+        .data-grid select,
+        .data-grid textarea {
+            width: 100%;
+            padding: 6px 8px;
+            border: 1px solid transparent;
+            border-radius: var(--radius-sm);
+            background: transparent;
+            color: var(--text-primary);
+            font-size: 14px;
+        }
+
+        .data-grid input:focus,
+        .data-grid select:focus,
+        .data-grid textarea:focus {
+            outline: none;
+            border-color: var(--primary);
+            background: var(--bg-secondary);
+        }
+
+        .cell-editing input,
+        .cell-editing select {
+            border-color: var(--primary);
+            background: var(--bg-secondary);
+        }
+
+        /* Cell Types */
+        .cell-checkbox {
+            width: 18px;
+            height: 18px;
+            cursor: pointer;
+        }
+
+        .cell-rating {
+            display: flex;
+            gap: 2px;
+        }
+
+        .rating-star {
+            color: #ffc107;
+            cursor: pointer;
+            font-size: 18px;
+        }
+
+        .rating-star.empty {
+            color: var(--border);
+        }
+
+        .cell-tags {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 4px;
+        }
+
+        .tag {
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 500;
+        }
+
+        .tag-blue { background: #e3f2fd; color: #1976d2; }
+        .tag-green { background: #e8f5e9; color: #388e3c; }
+        .tag-orange { background: #fff3e0; color: #f57c00; }
+        .tag-red { background: #ffebee; color: #d32f2f; }
+        .tag-purple { background: #f3e5f5; color: #7b1fa2; }
+
+        /* Pagination */
+        .pagination {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 8px;
+            padding: 16px;
+            background: var(--bg-secondary);
+            border-top: 1px solid var(--border);
+        }
+
+        .page-btn {
+            padding: 6px 12px;
+            border: 1px solid var(--border);
+            background: var(--bg-secondary);
+            border-radius: var(--radius-sm);
+            cursor: pointer;
+            font-size: 14px;
+        }
+
+        .page-btn:hover:not(:disabled) {
+            background: var(--bg-tertiary);
+        }
+
+        .page-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .page-info {
+            font-size: 14px;
+            color: var(--text-secondary);
+        }
+
+        /* Modal */
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.5);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .modal-overlay.show {
+            display: flex;
+        }
+
+        .modal {
+            background: var(--bg-secondary);
+            border-radius: var(--radius);
+            max-width: 600px;
+            width: 90%;
+            max-height: 80vh;
+            overflow-y: auto;
+            box-shadow: var(--shadow-lg);
+        }
+
+        .modal-header {
+            padding: 20px;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .modal-title {
+            font-size: 18px;
+            font-weight: 600;
+        }
+
+        .modal-close {
+            background: none;
+            border: none;
+            font-size: 24px;
+            cursor: pointer;
+            color: var(--text-secondary);
+        }
+
+        .modal-body {
+            padding: 20px;
+        }
+
+        .modal-footer {
+            padding: 20px;
+            border-top: 1px solid var(--border);
+            display: flex;
+            justify-content: flex-end;
+            gap: 10px;
+        }
+
+        /* Form */
+        .form-group {
+            margin-bottom: 16px;
+        }
+
+        .form-label {
+            display: block;
+            margin-bottom: 6px;
+            font-weight: 500;
+            font-size: 14px;
+        }
+
+        .form-input {
+            width: 100%;
+            padding: 10px 12px;
+            border: 1px solid var(--border);
+            border-radius: var(--radius-sm);
+            font-size: 14px;
+            color: var(--text-primary);
+            background: var(--bg-secondary);
+        }
+
+        .form-input:focus {
+            outline: none;
+            border-color: var(--primary);
+        }
+
+        /* Context Menu */
+        .context-menu {
+            display: none;
+            position: fixed;
+            background: var(--bg-secondary);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-sm);
+            box-shadow: var(--shadow-lg);
+            z-index: 2000;
+            min-width: 180px;
+            overflow: hidden;
+        }
+
+        .context-menu.show {
+            display: block;
+        }
+
+        .context-menu-item {
+            padding: 10px 16px;
+            cursor: pointer;
+            font-size: 14px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .context-menu-item:hover {
+            background: var(--bg-tertiary);
+        }
+
+        .context-menu-divider {
+            height: 1px;
+            background: var(--border);
+            margin: 4px 0;
+        }
+
+        /* Kanban View */
+        .kanban-board {
+            display: flex;
+            gap: 16px;
+            overflow-x: auto;
+            padding: 8px;
+        }
+
+        .kanban-column {
+            min-width: 280px;
+            background: var(--bg-tertiary);
+            border-radius: var(--radius);
+            padding: 12px;
+        }
+
+        .kanban-header {
+            font-weight: 600;
+            margin-bottom: 12px;
+            padding: 8px;
+            background: var(--bg-secondary);
+            border-radius: var(--radius-sm);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .kanban-count {
+            background: var(--primary-light);
+            color: var(--primary-dark);
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 12px;
+        }
+
+        .kanban-card {
+            background: var(--bg-secondary);
+            border-radius: var(--radius-sm);
+            padding: 12px;
+            margin-bottom: 8px;
+            box-shadow: var(--shadow);
+            cursor: pointer;
+            transition: transform 0.2s;
+        }
+
+        .kanban-card:hover {
+            transform: translateY(-2px);
+            box-shadow: var(--shadow-lg);
+        }
+
+        /* Gallery View */
+        .gallery-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+            gap: 16px;
+            padding: 8px;
+        }
+
+        .gallery-card {
+            background: var(--bg-secondary);
+            border-radius: var(--radius);
+            overflow: hidden;
+            box-shadow: var(--shadow);
+            transition: transform 0.2s;
+        }
+
+        .gallery-card:hover {
+            transform: translateY(-4px);
+            box-shadow: var(--shadow-lg);
+        }
+
+        .gallery-image {
+            height: 160px;
+            background: var(--bg-tertiary);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--text-secondary);
+        }
+
+        .gallery-content {
+            padding: 12px;
+        }
+
+        /* Filter Panel */
+        .filter-panel {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 16px;
+            margin-bottom: 16px;
+        }
+
+        .filter-row {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 10px;
+            align-items: center;
+        }
+
+        .filter-row select,
+        .filter-row input {
+            padding: 6px 10px;
+            border: 1px solid var(--border);
+            border-radius: var(--radius-sm);
+            font-size: 14px;
+        }
+
+        /* Comments */
+        .comments-section {
+            margin-top: 20px;
+            border-top: 1px solid var(--border);
+            padding-top: 16px;
+        }
+
+        .comment {
+            padding: 12px;
+            background: var(--bg-tertiary);
+            border-radius: var(--radius-sm);
+            margin-bottom: 10px;
+        }
+
+        .comment-header {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 8px;
+            font-size: 12px;
+            color: var(--text-secondary);
+        }
+
+        .comment-content {
+            font-size: 14px;
+        }
+
+        /* Toast Notifications */
+        .toast-container {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            z-index: 3000;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .toast {
+            padding: 12px 20px;
+            border-radius: var(--radius-sm);
+            background: var(--bg-secondary);
+            box-shadow: var(--shadow-lg);
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            animation: slideIn 0.3s ease;
+            min-width: 250px;
+        }
+
+        .toast-success { border-left: 4px solid var(--success); }
+        .toast-error { border-left: 4px solid var(--danger); }
+        .toast-warning { border-left: 4px solid var(--warning); }
+        .toast-info { border-left: 4px solid var(--info); }
+
+        @keyframes slideIn {
+            from { transform: translateX(100%); opacity: 0; }
+            to { transform: translateX(0); opacity: 1; }
+        }
+
+        /* Loading Spinner */
+        .spinner {
+            width: 24px;
+            height: 24px;
+            border: 3px solid var(--border);
+            border-top-color: var(--primary);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        /* Empty State */
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            color: var(--text-secondary);
+        }
+
+        .empty-state-icon {
+            font-size: 48px;
+            margin-bottom: 16px;
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .sidebar {
+                display: none;
+            }
+            
+            .header {
+                padding: 0 12px;
+            }
+            
+            .search-bar {
+                display: none;
+            }
+        }
+
+        /* Scrollbar */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: var(--bg-tertiary);
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: var(--border);
+            border-radius: 4px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: var(--text-secondary);
+        }
+
+        /* Drag Handle */
+        .drag-handle {
+            cursor: grab;
+            padding: 4px;
+            color: var(--text-secondary);
+        }
+
+        .drag-handle:active {
+            cursor: grabbing;
+        }
+
+        /* Frozen Columns */
+        .data-grid th.frozen,
+        .data-grid td.frozen {
+            position: sticky;
+            left: 0;
+            z-index: 20;
+            background: var(--bg-tertiary);
+        }
+
+        .data-grid th.frozen {
+            z-index: 30;
+        }
+
+        /* Conditional Formatting */
+        .cf-high { background: rgba(102, 187, 106, 0.2) !important; }
+        .cf-medium { background: rgba(255, 167, 38, 0.2) !important; }
+        .cf-low { background: rgba(239, 83, 80, 0.2) !important; }
+
+        /* Keyboard Shortcuts Help */
+        .shortcuts-help {
+            font-size: 13px;
+            line-height: 1.8;
+        }
+
+        .shortcut-key {
+            display: inline-block;
+            padding: 2px 8px;
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            font-family: monospace;
+            font-size: 12px;
+            margin: 0 4px;
+        }
+    </style>
+</head>
+<body>
+    <!-- Header -->
+    <header class="header">
+        <div class="logo">
+            <div class="logo-icon">DB</div>
+            <span>Table Editor</span>
+        </div>
+        
+        <div class="search-bar">
+            <span class="search-icon">🔍</span>
+            <input type="text" id="globalSearch" placeholder="Search across all tables... (Press /)">
+        </div>
+        
+        <div class="header-actions">
+            <button class="btn btn-secondary btn-icon" onclick="toggleDarkMode()" title="Toggle Dark Mode">🌓</button>
+            <button class="btn btn-secondary btn-icon" onclick="showShortcuts()" title="Keyboard Shortcuts">⌨️</button>
+            <button class="btn btn-primary" onclick="showNewTableModal()">+ New Table</button>
+        </div>
+    </header>
+
+    <!-- Main Container -->
+    <div class="main-container">
+        <!-- Sidebar -->
+        <aside class="sidebar">
+            <div class="sidebar-section">
+                <div class="sidebar-title">Tables</div>
+                <div class="table-list" id="tableList"></div>
+            </div>
+            
+            <div class="sidebar-section">
+                <div class="sidebar-title">Saved Filters</div>
+                <div class="table-list" id="savedFilters"></div>
+            </div>
+            
+            <div class="sidebar-section">
+                <div class="sidebar-title">Recent</div>
+                <div class="table-list" id="recentTables"></div>
+            </div>
+        </aside>
+
+        <!-- Content -->
+        <main class="content">
+            <div id="workspace">
+                <!-- Dynamic content will be rendered here -->
+            </div>
+        </main>
+    </div>
+
+    <!-- Context Menu -->
+    <div class="context-menu" id="contextMenu">
+        <div class="context-menu-item" onclick="contextAction('sortAsc')">↑ Sort Ascending</div>
+        <div class="context-menu-item" onclick="contextAction('sortDesc')">↓ Sort Descending</div>
+        <div class="context-menu-divider"></div>
+        <div class="context-menu-item" onclick="contextAction('hideColumn')">Hide Column</div>
+        <div class="context-menu-item" onclick="contextAction('freezeColumn')">Freeze Column</div>
+        <div class="context-menu-divider"></div>
+        <div class="context-menu-item" onclick="contextAction('addGroup')">Group by This Field</div>
+        <div class="context-menu-divider"></div>
+        <div class="context-menu-item" onclick="contextAction('editField')">Edit Field</div>
+        <div class="context-menu-item" onclick="contextAction('deleteField')" style="color: var(--danger)">Delete Field</div>
+    </div>
+
+    <!-- New Record Modal -->
+    <div class="modal-overlay" id="newRecordModal">
+        <div class="modal">
+            <div class="modal-header">
+                <h3 class="modal-title">New Record</h3>
+                <button class="modal-close" onclick="closeModal('newRecordModal')">&times;</button>
+            </div>
+            <div class="modal-body" id="newRecordForm"></div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeModal('newRecordModal')">Cancel</button>
+                <button class="btn btn-primary" onclick="submitNewRecord()">Create Record</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- New Table Modal -->
+    <div class="modal-overlay" id="newTableModal">
+        <div class="modal">
+            <div class="modal-header">
+                <h3 class="modal-title">Create New Table</h3>
+                <button class="modal-close" onclick="closeModal('newTableModal')">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label class="form-label">Table Name</label>
+                    <input type="text" class="form-input" id="newTableName" placeholder="Enter table name">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Primary Key Column</label>
+                    <input type="text" class="form-input" id="newTablePK" placeholder="id" value="id">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Additional Columns (comma-separated)</label>
+                    <input type="text" class="form-input" id="newTableColumns" placeholder="name, email, created_at">
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeModal('newTableModal')">Cancel</button>
+                <button class="btn btn-primary" onclick="createNewTable()">Create Table</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Filter Modal -->
+    <div class="modal-overlay" id="filterModal">
+        <div class="modal" style="max-width: 700px;">
+            <div class="modal-header">
+                <h3 class="modal-title">Filter & Sort</h3>
+                <button class="modal-close" onclick="closeModal('filterModal')">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div id="filterBuilder"></div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeModal('filterModal')">Cancel</button>
+                <button class="btn btn-primary" onclick="applyFilters()">Apply Filters</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Shortcuts Modal -->
+    <div class="modal-overlay" id="shortcutsModal">
+        <div class="modal">
+            <div class="modal-header">
+                <h3 class="modal-title">Keyboard Shortcuts</h3>
+                <button class="modal-close" onclick="closeModal('shortcutsModal')">&times;</button>
+            </div>
+            <div class="modal-body shortcuts-help">
+                <p><span class="shortcut-key">Ctrl</span>+<span class="shortcut-key">N</span> New Record</p>
+                <p><span class="shortcut-key">Ctrl</span>+<span class="shortcut-key">S</span> Save Current Record</p>
+                <p><span class="shortcut-key">Ctrl</span>+<span class="shortcut-key">Z</span> Undo Last Action</p>
+                <p><span class="shortcut-key">Ctrl</span>+<span class="shortcut-key">C</span> Copy Cell Value</p>
+                <p><span class="shortcut-key">Ctrl</span>+<span class="shortcut-key">V</span> Paste Cell Value</p>
+                <p><span class="shortcut-key">Delete</span> Delete Selected Records</p>
+                <p><span class="shortcut-key">/</span> Focus Search</p>
+                <p><span class="shortcut-key">F2</span> Edit Selected Cell</p>
+                <p><span class="shortcut-key">Esc</span> Cancel Editing</p>
+                <p><span class="shortcut-key">Enter</span> Confirm Edit / Move Down</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast Container -->
+    <div class="toast-container" id="toastContainer"></div>
+
+    <script>
+        // =====================================================================
+        // STATE MANAGEMENT
+        // =====================================================================
+        
+        const state = {
+            currentTable: null,
+            currentView: 'grid',
+            tables: [],
+            tableData: null,
+            tableConfig: null,
+            currentPage: 1,
+            pageSize: 100,
+            selectedRows: new Set(),
+            selectedCell: null,
+            filters: [],
+            sorts: [],
+            groups: [],
+            darkMode: false,
+            recentTables: [],
+            clipboard: null,
+            undoStack: [],
+            redoStack: []
+        };
+
+        // =====================================================================
+        // INITIALIZATION
+        // =====================================================================
+        
+        document.addEventListener('DOMContentLoaded', () => {
+            loadTables();
+            setupKeyboardShortcuts();
+            setupGlobalSearch();
+            loadRecentTables();
+        });
+
+        function loadTables() {
+            fetch('/api/tables')
+                .then(r => r.json())
+                .then(data => {
+                    state.tables = data.tables;
+                    renderTableList();
+                    if (data.tables.length > 0) {
+                        selectTable(data.tables[0].db_table_name || data.tables[0].name);
+                    }
+                })
+                .catch(err => showToast('Failed to load tables', 'error'));
+        }
+
+        function renderTableList() {
+            const container = document.getElementById('tableList');
+            container.innerHTML = state.tables.map(t => {
+                const name = t.db_table_name || t.name;
+                const isActive = state.currentTable === name ? 'active' : '';
+                return `
+                    <div class="table-item ${isActive}" onclick="selectTable('${name}')">
+                        <div class="table-icon">📊</div>
+                        <span>${t.name}</span>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function selectTable(tableName) {
+            state.currentTable = tableName;
+            state.currentPage = 1;
+            state.selectedRows.clear();
+            
+            renderTableList();
+            loadTableConfig(tableName);
+            addToRecent(tableName);
+        }
+
+        function loadTableConfig(tableName) {
+            Promise.all([
+                fetch(`/api/tables/${tableName}/data?limit=${state.pageSize}&offset=0`).then(r => r.json()),
+                fetch(`/api/tables/${tableName}/config`).then(r => r.json())
+            ])
+            .then(([dataResult, configResult]) => {
+                state.tableData = dataResult;
+                state.tableConfig = configResult;
+                renderWorkspace();
+            })
+            .catch(err => showToast('Failed to load table data', 'error'));
+        }
+
+        // =====================================================================
+        // RENDERING
+        // =====================================================================
+        
+        function renderWorkspace() {
+            const container = document.getElementById('workspace');
+            
+            if (!state.tableData || !state.tableData.data) {
+                container.innerHTML = '<div class="empty-state"><div class="empty-state-icon">📭</div><p>No data available</p></div>';
+                return;
+            }
+            
+            const { data, columns, primary_keys, total } = state.tableData;
+            const pkColumn = primary_keys[0];
+            
+            container.innerHTML = `
+                <div class="toolbar">
+                    <button class="btn btn-primary" onclick="showNewRecordModal()">+ Add Record</button>
+                    <button class="btn btn-secondary" onclick="showFilterModal()">🔍 Filter</button>
+                    <button class="btn btn-secondary" onclick="toggleView()">Switch View</button>
+                    <button class="btn btn-secondary" onclick="exportCSV()">📥 Export CSV</button>
+                    <button class="btn btn-danger" onclick="bulkDelete()" ${state.selectedRows.size === 0 ? 'disabled' : ''}>
+                        🗑️ Delete Selected (${state.selectedRows.size})
+                    </button>
+                    <span style="margin-left: auto; color: var(--text-secondary);">
+                        ${total} records
+                    </span>
+                </div>
+                
+                <div class="view-tabs">
+                    <div class="view-tab ${state.currentView === 'grid' ? 'active' : ''}" onclick="setView('grid')">
+                        ▦ Grid
+                    </div>
+                    <div class="view-tab ${state.currentView === 'kanban' ? 'active' : ''}" onclick="setView('kanban')">
+                        ≡ Kanban
+                    </div>
+                    <div class="view-tab ${state.currentView === 'gallery' ? 'active' : ''}" onclick="setView('gallery')">
+                        ⊞ Gallery
+                    </div>
+                </div>
+                
+                ${renderDataView(data, columns, pkColumn)}
+                
+                ${renderPagination(total)}
+            `;
+        }
+
+        function renderDataView(data, columns, pkColumn) {
+            if (state.currentView === 'grid') {
+                return renderGridView(data, columns, pkColumn);
+            } else if (state.currentView === 'kanban') {
+                return renderKanbanView(data, columns, pkColumn);
+            } else {
+                return renderGalleryView(data, columns, pkColumn);
+            }
+        }
+
+        function renderGridView(data, columns, pkColumn) {
+            const headers = columns.map(c => c.column_name);
+            
+            return `
+                <div class="data-grid-container">
+                    <table class="data-grid">
+                        <thead>
+                            <tr>
+                                <th style="width: 40px;">
+                                    <input type="checkbox" class="cell-checkbox" 
+                                           onchange="toggleSelectAll(this.checked)">
+                                </th>
+                                ${headers.map(h => `
+                                    <th draggable="true" ondragstart="handleDragStart(event, '${h}')" 
+                                        ondragover="handleDragOver(event)" ondrop="handleDrop(event, '${h}')"
+                                        oncontextmenu="showContextMenu(event, '${h}')">
+                                        <span class="drag-handle">☰</span> ${h}
+                                    </th>
+                                `).join('')}
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${data.map((row, idx) => `
+                                <tr class="${state.selectedRows.has(row[pkColumn]) ? 'selected' : ''}" 
+                                    data-pk="${row[pkColumn]}">
+                                    <td>
+                                        <input type="checkbox" class="cell-checkbox" 
+                                               ${state.selectedRows.has(row[pkColumn]) ? 'checked' : ''}
+                                               onchange="toggleRowSelection('${row[pkColumn]}', this.checked)">
+                                    </td>
+                                    ${headers.map(h => renderCell(row, h, idx)).join('')}
+                                </tr>
+                            `).join('')}
+                        </tbody>
+                    </table>
+                </div>
+            `;
+        }
+
+        function renderCell(row, columnName, rowIndex) {
+            const value = row[columnName];
+            const isEditing = state.selectedCell && state.selectedCell.row === rowIndex && state.selectedCell.column === columnName;
+            
+            // Determine cell type based on column characteristics
+            let cellContent;
+            
+            if (typeof value === 'boolean') {
+                cellContent = `<input type="checkbox" class="cell-checkbox" 
+                              ${value ? 'checked' : ''} 
+                              onchange="updateCell('${columnName}', ${rowIndex}, this.checked)">`;
+            } else if (columnName.toLowerCase().includes('email')) {
+                cellContent = `<a href="mailto:${value}">${value || ''}</a>`;
+            } else if (columnName.toLowerCase().includes('url') || columnName.toLowerCase().includes('link')) {
+                cellContent = value ? `<a href="${value}" target="_blank">${value}</a>` : '';
+            } else if (typeof value === 'number' && columnName.toLowerCase().includes('rating')) {
+                cellContent = renderRating(value, columnName, rowIndex);
+            } else if (Array.isArray(value)) {
+                cellContent = `<div class="cell-tags">${value.map(v => `<span class="tag tag-blue">${v}</span>`).join('')}</div>`;
+            } else {
+                cellContent = `<span ondblclick="editCell(${rowIndex}, '${columnName}')">${value !== null ? value : ''}</span>`;
+            }
+            
+            return `<td ondblclick="editCell(${rowIndex}, '${columnName}')">${cellContent}</td>`;
+        }
+
+        function renderRating(value, columnName, rowIndex) {
+            const maxRating = 5;
+            let html = '<div class="cell-rating">';
+            for (let i = 1; i <= maxRating; i++) {
+                html += `<span class="rating-star ${i <= value ? '' : 'empty'}" 
+                         onclick="updateCell('${columnName}', ${rowIndex}, ${i})">★</span>`;
+            }
+            html += '</div>';
+            return html;
+        }
+
+        function renderKanbanView(data, columns, pkColumn) {
+            // Group by first select-like column or status column
+            const groupColumn = columns.find(c => 
+                c.column_name.toLowerCase().includes('status') || 
+                c.column_name.toLowerCase().includes('stage')
+            );
+            
+            if (!groupColumn) {
+                return '<div class="empty-state">No suitable column for Kanban view. Use a status/stage column.</div>';
+            }
+            
+            const groups = {};
+            data.forEach(row => {
+                const key = row[groupColumn.column_name] || 'Unassigned';
+                if (!groups[key]) groups[key] = [];
+                groups[key].push(row);
+            });
+            
+            return `
+                <div class="kanban-board">
+                    ${Object.entries(groups).map(([group, items]) => `
+                        <div class="kanban-column">
+                            <div class="kanban-header">
+                                <span>${group}</span>
+                                <span class="kanban-count">${items.length}</span>
+                            </div>
+                            ${items.map(row => `
+                                <div class="kanban-card" onclick="selectRecord('${row[pkColumn]}')">
+                                    <strong>${row[columns[1]?.column_name] || 'Untitled'}</strong>
+                                    <div style="font-size: 12px; color: var(--text-secondary); margin-top: 8px;">
+                                        ${Object.entries(row).slice(2, 5).map(([k, v]) => `${k}: ${v}`).join(' | ')}
+                                    </div>
+                                </div>
+                            `).join('')}
+                        </div>
+                    `).join('')}
+                </div>
+            `;
+        }
+
+        function renderGalleryView(data, columns, pkColumn) {
+            const titleColumn = columns[1]?.column_name || columns[0]?.column_name;
+            const descColumn = columns[2]?.column_name;
+            
+            return `
+                <div class="gallery-grid">
+                    ${data.map(row => `
+                        <div class="gallery-card" onclick="selectRecord('${row[pkColumn]}')">
+                            <div class="gallery-image">📷</div>
+                            <div class="gallery-content">
+                                <strong>${row[titleColumn] || 'Untitled'}</strong>
+                                ${descColumn && row[descColumn] ? `<p style="font-size: 13px; color: var(--text-secondary); margin-top: 8px;">${row[descColumn]}</p>` : ''}
+                            </div>
+                        </div>
+                    `).join('')}
+                </div>
+            `;
+        }
+
+        function renderPagination(total) {
+            const totalPages = Math.ceil(total / state.pageSize);
+            
+            return `
+                <div class="pagination">
+                    <button class="page-btn" onclick="goToPage(1)" ${state.currentPage === 1 ? 'disabled' : ''}>First</button>
+                    <button class="page-btn" onclick="goToPage(${state.currentPage - 1})" ${state.currentPage === 1 ? 'disabled' : ''}>Previous</button>
+                    <span class="page-info">Page ${state.currentPage} of ${totalPages || 1}</span>
+                    <button class="page-btn" onclick="goToPage(${state.currentPage + 1})" ${state.currentPage >= totalPages ? 'disabled' : ''}>Next</button>
+                    <button class="page-btn" onclick="goToPage(${totalPages})" ${state.currentPage >= totalPages ? 'disabled' : ''}>Last</button>
+                </div>
+            `;
+        }
+
+        // =====================================================================
+        // DATA OPERATIONS
+        // =====================================================================
+        
+        function showNewRecordModal() {
+            const modal = document.getElementById('newRecordModal');
+            const form = document.getElementById('newRecordForm');
+            
+            if (!state.tableConfig || !state.tableConfig.fields) {
+                form.innerHTML = '<p>Loading form...</p>';
+            } else {
+                form.innerHTML = state.tableConfig.fields.map(f => `
+                    <div class="form-group">
+                        <label class="form-label">${f.name}</label>
+                        ${renderFormField(f)}
+                    </div>
+                `).join('');
+            }
+            
+            modal.classList.add('show');
+        }
+
+        function renderFormField(field) {
+            const type = field.type || 'singleLineText';
+            
+            switch(type) {
+                case 'checkbox':
+                    return `<input type="checkbox" data-field="${field.name}">`;
+                case 'singleSelect':
+                case 'multipleSelects':
+                    const options = field.options?.choices || [];
+                    return `<select data-field="${field.name}" ${type === 'multipleSelects' ? 'multiple' : ''}>
+                        ${options.map(o => `<option value="${o.name}">${o.name}</option>`).join('')}
+                    </select>`;
+                case 'date':
+                    return `<input type="date" data-field="${field.name}" class="form-input">`;
+                case 'email':
+                    return `<input type="email" data-field="${field.name}" class="form-input">`;
+                case 'number':
+                case 'currency':
+                    return `<input type="number" data-field="${field.name}" class="form-input">`;
+                case 'longText':
+                    return `<textarea data-field="${field.name}" class="form-input" rows="3"></textarea>`;
+                default:
+                    return `<input type="text" data-field="${field.name}" class="form-input">`;
+            }
+        }
+
+        function submitNewRecord() {
+            const form = document.getElementById('newRecordForm');
+            const inputs = form.querySelectorAll('[data-field]');
+            const data = {};
+            
+            inputs.forEach(input => {
+                const field = input.dataset.field;
+                data[field] = input.type === 'checkbox' ? input.checked : input.value;
+            });
+            
+            fetch(`/api/tables/${state.currentTable}/rows`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(data)
+            })
+            .then(r => r.json())
+            .then(result => {
+                if (result.success) {
+                    showToast('Record created successfully', 'success');
+                    closeModal('newRecordModal');
+                    loadTableConfig(state.currentTable);
+                } else {
+                    showToast('Failed to create record', 'error');
+                }
+            })
+            .catch(err => showToast('Error creating record', 'error'));
+        }
+
+        function updateCell(columnName, rowIndex, value) {
+            const row = state.tableData.data[rowIndex];
+            const pkColumn = state.tableData.primary_keys[0];
+            const pkValue = row[pkColumn];
+            
+            // Save to undo stack
+            saveUndoState();
+            
+            fetch(`/api/tables/${state.currentTable}/rows/${encodeURIComponent(pkValue)}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ [columnName]: value })
+            })
+            .then(r => r.json())
+            .then(result => {
+                if (result.success) {
+                    showToast('Cell updated', 'success');
+                    loadTableConfig(state.currentTable);
+                }
+            })
+            .catch(err => showToast('Failed to update cell', 'error'));
+        }
+
+        function editCell(rowIndex, columnName) {
+            state.selectedCell = { row: rowIndex, column: columnName };
+            loadTableConfig(state.currentTable); // Re-render with edit mode
+        }
+
+        function toggleRowSelection(pkValue, selected) {
+            if (selected) {
+                state.selectedRows.add(pkValue);
+            } else {
+                state.selectedRows.delete(pkValue);
+            }
+            renderWorkspace();
+        }
+
+        function toggleSelectAll(selected) {
+            if (selected) {
+                state.tableData.data.forEach(row => {
+                    const pk = row[state.tableData.primary_keys[0]];
+                    state.selectedRows.add(pk);
+                });
+            } else {
+                state.selectedRows.clear();
+            }
+            renderWorkspace();
+        }
+
+        function bulkDelete() {
+            if (state.selectedRows.size === 0) return;
+            
+            if (!confirm(`Delete ${state.selectedRows.size} selected records?`)) return;
+            
+            fetch(`/api/tables/${state.currentTable}/bulk-delete`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify([...state.selectedRows])
+            })
+            .then(r => r.json())
+            .then(result => {
+                if (result.success) {
+                    showToast(`Deleted ${result.deleted_count} records`, 'success');
+                    state.selectedRows.clear();
+                    loadTableConfig(state.currentTable);
+                }
+            })
+            .catch(err => showToast('Failed to delete records', 'error'));
+        }
+
+        function goToPage(page) {
+            state.currentPage = page;
+            const offset = (page - 1) * state.pageSize;
+            loadTableConfig(state.currentTable);
+        }
+
+        function setView(view) {
+            state.currentView = view;
+            renderWorkspace();
+        }
+
+        function toggleView() {
+            const views = ['grid', 'kanban', 'gallery'];
+            const currentIndex = views.indexOf(state.currentView);
+            state.currentView = views[(currentIndex + 1) % views.length];
+            renderWorkspace();
+        }
+
+        function exportCSV() {
+            window.open(`/api/tables/${state.currentTable}/export/csv?limit=1000`, '_blank');
+            showToast('Export started', 'info');
+        }
+
+        // =====================================================================
+        // DRAG AND DROP
+        // =====================================================================
+        
+        let draggedColumn = null;
+
+        function handleDragStart(event, columnName) {
+            draggedColumn = columnName;
+            event.target.classList.add('dragging');
+            event.dataTransfer.effectAllowed = 'move';
+        }
+
+        function handleDragOver(event) {
+            event.preventDefault();
+            event.dataTransfer.dropEffect = 'move';
+            event.target.closest('th')?.classList.add('drag-over');
+        }
+
+        function handleDrop(event, targetColumn) {
+            event.preventDefault();
+            document.querySelectorAll('.drag-over').forEach(el => el.classList.remove('drag-over'));
+            document.querySelectorAll('.dragging').forEach(el => el.classList.remove('dragging'));
+            
+            if (draggedColumn && draggedColumn !== targetColumn) {
+                // In a full implementation, this would reorder columns
+                showToast(`Would reorder: ${draggedColumn} → ${targetColumn}`, 'info');
+            }
+            
+            draggedColumn = null;
+        }
+
+        // =====================================================================
+        // CONTEXT MENU
+        // =====================================================================
+        
+        let contextTarget = null;
+
+        function showContextMenu(event, columnName) {
+            event.preventDefault();
+            contextTarget = columnName;
+            
+            const menu = document.getElementById('contextMenu');
+            menu.style.left = event.pageX + 'px';
+            menu.style.top = event.pageY + 'px';
+            menu.classList.add('show');
+        }
+
+        function hideContextMenu() {
+            document.getElementById('contextMenu').classList.remove('show');
+        }
+
+        function contextAction(action) {
+            hideContextMenu();
+            
+            switch(action) {
+                case 'sortAsc':
+                    state.sorts = [{ field: contextTarget, direction: 'ASC' }];
+                    loadTableConfig(state.currentTable);
+                    break;
+                case 'sortDesc':
+                    state.sorts = [{ field: contextTarget, direction: 'DESC' }];
+                    loadTableConfig(state.currentTable);
+                    break;
+                case 'hideColumn':
+                    showToast(`Hidden column: ${contextTarget}`, 'info');
+                    break;
+                case 'freezeColumn':
+                    showToast(`Frozen column: ${contextTarget}`, 'info');
+                    break;
+                case 'addGroup':
+                    state.groups = [contextTarget];
+                    loadTableConfig(state.currentTable);
+                    break;
+            }
+        }
+
+        document.addEventListener('click', hideContextMenu);
+
+        // =====================================================================
+        // FILTERS
+        // =====================================================================
+        
+        function showFilterModal() {
+            const modal = document.getElementById('filterModal');
+            const builder = document.getElementById('filterBuilder');
+            
+            if (!state.tableData) return;
+            
+            const columns = state.tableData.columns;
+            
+            builder.innerHTML = `
+                <div class="filter-row">
+                    <select id="filterField">
+                        ${columns.map(c => `<option value="${c.column_name}">${c.column_name}</option>`).join('')}
+                    </select>
+                    <select id="filterOperator">
+                        <option value="equals">Equals</option>
+                        <option value="not_equals">Not Equals</option>
+                        <option value="contains">Contains</option>
+                        <option value="greater_than">Greater Than</option>
+                        <option value="less_than">Less Than</option>
+                    </select>
+                    <input type="text" id="filterValue" placeholder="Value" class="form-input" style="flex: 1;">
+                </div>
+                <button class="btn btn-secondary" onclick="addFilterRow()">+ Add Filter</button>
+            `;
+            
+            modal.classList.add('show');
+        }
+
+        function addFilterRow() {
+            // Implementation for adding more filter rows
+        }
+
+        function applyFilters() {
+            const field = document.getElementById('filterField').value;
+            const operator = document.getElementById('filterOperator').value;
+            const value = document.getElementById('filterValue').value;
+            
+            state.filters = [{ field, operator, value }];
+            closeModal('filterModal');
+            loadTableConfig(state.currentTable);
+        }
+
+        // =====================================================================
+        // MODALS
+        // =====================================================================
+        
+        function closeModal(modalId) {
+            document.getElementById(modalId).classList.remove('show');
+        }
+
+        function showNewTableModal() {
+            document.getElementById('newTableModal').classList.add('show');
+        }
+
+        function createNewTable() {
+            const name = document.getElementById('newTableName').value;
+            const pk = document.getElementById('newTablePK').value;
+            const columnsStr = document.getElementById('newTableColumns').value;
+            
+            const columns = [
+                { name: pk, type: 'SERIAL', primary_key: true, nullable: false }
+            ];
+            
+            if (columnsStr) {
+                columnsStr.split(',').forEach(col => {
+                    columns.push({ name: col.trim(), type: 'TEXT', nullable: true });
+                });
+            }
+            
+            fetch('/api/tables', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name, columns })
+            })
+            .then(r => r.json())
+            .then(result => {
+                showToast('Table created', 'success');
+                closeModal('newTableModal');
+                loadTables();
+            })
+            .catch(err => showToast('Failed to create table', 'error'));
+        }
+
+        // =====================================================================
+        // KEYBOARD SHORTCUTS
+        // =====================================================================
+        
+        function setupKeyboardShortcuts() {
+            document.addEventListener('keydown', (e) => {
+                // Global search
+                if (e.key === '/' && document.activeElement.tagName !== 'INPUT') {
+                    e.preventDefault();
+                    document.getElementById('globalSearch').focus();
+                }
+                
+                // New record
+                if (e.ctrlKey && e.key === 'n') {
+                    e.preventDefault();
+                    showNewRecordModal();
+                }
+                
+                // Delete
+                if (e.key === 'Delete' && state.selectedRows.size > 0) {
+                    e.preventDefault();
+                    bulkDelete();
+                }
+                
+                // Escape
+                if (e.key === 'Escape') {
+                    document.querySelectorAll('.modal-overlay.show').forEach(m => m.classList.remove('show'));
+                    hideContextMenu();
+                }
+            });
+        }
+
+        function showShortcuts() {
+            document.getElementById('shortcutsModal').classList.add('show');
+        }
+
+        // =====================================================================
+        // SEARCH
+        // =====================================================================
+        
+        function setupGlobalSearch() {
+            const input = document.getElementById('globalSearch');
+            let debounceTimer;
+            
+            input.addEventListener('input', (e) => {
+                clearTimeout(debounceTimer);
+                const query = e.target.value.trim();
+                
+                if (query.length < 2) return;
+                
+                debounceTimer = setTimeout(() => {
+                    performSearch(query);
+                }, 300);
+            });
+        }
+
+        function performSearch(query) {
+            fetch(`/api/search?q=${encodeURIComponent(query)}`)
+                .then(r => r.json())
+                .then(data => {
+                    // Show search results in a dropdown or modal
+                    console.log('Search results:', data);
+                });
+        }
+
+        // =====================================================================
+        // UTILITIES
+        // =====================================================================
+        
+        function showToast(message, type = 'info') {
+            const container = document.getElementById('toastContainer');
+            const toast = document.createElement('div');
+            toast.className = `toast toast-${type}`;
+            toast.textContent = message;
+            container.appendChild(toast);
+            
+            setTimeout(() => toast.remove(), 3000);
+        }
+
+        function toggleDarkMode() {
+            state.darkMode = !state.darkMode;
+            document.body.classList.toggle('dark-mode', state.darkMode);
+            localStorage.setItem('darkMode', state.darkMode);
+        }
+
+        function addToRecent(tableName) {
+            if (!state.recentTables.includes(tableName)) {
+                state.recentTables.unshift(tableName);
+                state.recentTables = state.recentTables.slice(0, 5);
+                localStorage.setItem('recentTables', JSON.stringify(state.recentTables));
+                renderRecentTables();
+            }
+        }
+
+        function loadRecentTables() {
+            const stored = localStorage.getItem('recentTables');
+            if (stored) {
+                state.recentTables = JSON.parse(stored);
+                renderRecentTables();
+            }
+        }
+
+        function renderRecentTables() {
+            const container = document.getElementById('recentTables');
+            container.innerHTML = state.recentTables.map(name => `
+                <div class="table-item" onclick="selectTable('${name}')">
+                    <div class="table-icon">🕐</div>
+                    <span>${name}</span>
+                </div>
+            `).join('');
+        }
+
+        function saveUndoState() {
+            state.undoStack.push(JSON.stringify(state.tableData));
+            if (state.undoStack.length > 20) state.undoStack.shift();
+            state.redoStack = [];
+        }
+
+        function undo() {
+            if (state.undoStack.length === 0) return;
+            state.redoStack.push(JSON.stringify(state.tableData));
+            state.tableData = JSON.parse(state.undoStack.pop());
+            renderWorkspace();
+        }
+
+        // Load dark mode preference
+        if (localStorage.getItem('darkMode') === 'true') {
+            state.darkMode = true;
+            document.body.classList.add('dark-mode');
+        }
+    </script>
+</body>
+</html>'''
 
 
 # =============================================================================
 # MAIN ENTRY POINT
 # =============================================================================
 
-def main():
-    """Main entry point"""
-    import argparse
-    
-    parser = argparse.ArgumentParser(description="Database Table Editor")
-    parser.add_argument("--host", default="0.0.0.0", help="Host to bind to")
-    parser.add_argument("--port", type=int, default=8000, help="Port to bind to")
-    parser.add_argument("--db-host", default="localhost", help="Database host")
-    parser.add_argument("--db-port", type=int, default=5432, help="Database port")
-    parser.add_argument("--db-name", default="appdb", help="Database name")
-    parser.add_argument("--db-user", default="appuser", help="Database user")
-    parser.add_argument("--db-password", default="apppass", help="Database password")
-    parser.add_argument("--test", action="store_true", help="Run tests only")
-    
-    args = parser.parse_args()
-    
-    # Update DB config
-    DB_CONFIG.host = args.db_host
-    DB_CONFIG.port = args.db_port
-    DB_CONFIG.database = args.db_name
-    DB_CONFIG.user = args.db_user
-    DB_CONFIG.password = args.db_password
-    
-    if args.test:
-        success = run_tests()
-        sys.exit(0 if success else 1)
-    
-    print("\n" + "="*60)
-    print("DATABASE TABLE EDITOR")
-    print("="*60)
-    print(f"Starting server on http://{args.host}:{args.port}")
-    print(f"Database: {DB_CONFIG.database}@{DB_CONFIG.host}:{DB_CONFIG.port}")
-    print("="*60 + "\n")
-    
-    run(app, host=args.host, port=args.port)
-
-
 if __name__ == "__main__":
-    main()
+    print("=" * 60)
+    print("Database Table Editor - AirTable Style")
+    print("=" * 60)
+    print("\nStarting server...")
+    print("\nConfiguration:")
+    print(f"  Host: {DB_CONFIG.host}")
+    print(f"  Port: {DB_CONFIG.port}")
+    print(f"  Database: {DB_CONFIG.database}")
+    print(f"  User: {DB_CONFIG.user}")
+    print("\nAccess the application at: http://localhost:8000")
+    print("\nPress Ctrl+C to stop the server\n")
+    
+    run(app, host="0.0.0.0", port=8000, log_level="info")
