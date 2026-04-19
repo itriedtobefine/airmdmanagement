@@ -795,9 +795,17 @@ def main():
     logger.info(f"✗ Failed: {failed}")
     
     logger.info("")
-    logger.info("Бенчмарк завершен успешно!")
     
-    return 0
+    # Определяем общий статус бенчмарка
+    if failed == len(all_results):
+        logger.error("❌ Бенчмарк ЗАВЕРШЕН С ОШИБКАМИ: все модели не прошли тестирование")
+        return 1
+    elif failed > 0:
+        logger.warning(f"⚠ Бенчмарк завершен с предупреждениями: {failed} модель(ей) не прошли тестирование")
+        return 2
+    else:
+        logger.info("✅ Бенчмарк завершен успешно: все модели прошли тестирование")
+        return 0
 
 
 if __name__ == '__main__':
