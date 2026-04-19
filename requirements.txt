@@ -1,0 +1,12 @@
+# Dependencies for Task Decomposer Application
+# Using pre-compiled binaries where possible
+
+# Core ML dependencies (already installed in environment)
+# transformers>=4.50.0
+# torch>=2.0.0
+# huggingface-hub>=0.20.0
+
+# Additional utilities
+accelerate>=0.25.0
+sentencepiece>=0.1.99
+protobuf>=3.20.0

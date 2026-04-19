@@ -1,0 +1,1 @@
+Nothing should be ignored based on the provided file changes. The added files (`download_model.py` and `requirements.txt`) are source code and dependency configuration files that should be tracked in version control.
