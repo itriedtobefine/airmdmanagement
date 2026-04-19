@@ -1,0 +1,19 @@
+# LLM Benchmark System - Requirements
+# Python 3.10+ required
+
+# Core inference engine (CPU-only)
+# Для установки используйте:
+#   export CMAKE_ARGS="-DGGML_BLAS=OFF -DGGML_NATIVE=OFF"
+#   pip install llama-cpp-python --no-cache-dir
+llama-cpp-python>=0.2.90; python_version >= "3.10"
+
+# Configuration parsing
+pyyaml>=6.0
+
+# JSON schema validation
+jsonschema>=4.20.0
+
+# Optional: RAM monitoring (recommended for weak hardware)
+psutil>=5.9.0
+
+# Note: pydantic is optional and only used for additional validation if installed

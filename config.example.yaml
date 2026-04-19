@@ -1,0 +1,19 @@
+# Configuration file for LLM Benchmark System
+# Copy this file and modify the models list with paths to your GGUF files
+
+# List of GGUF model files to benchmark (full paths)
+models:
+  - /path/to/qwen2.5-1.5b-instruct.Q4_K_M.gguf
+  - /path/to/qwen2.5-3b-instruct.Q4_K_M.gguf
+  - /path/to/llama-3.2-3b-instruct.Q4_K_M.gguf
+  - /path/to/minicpm-2b-sft.Q4_K_M.gguf
+  - /path/to/phi-3.5-mini-instruct.Q4_K_M.gguf
+
+# Output directory for reports and logs
+output_dir: ./benchmark_output
+
+# Logging level: DEBUG, INFO, WARNING, ERROR
+log_level: INFO
+
+# Enable RAM monitoring (requires psutil for best results)
+enable_ram_monitoring: true
