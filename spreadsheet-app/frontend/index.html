@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Spreadsheet App - Веб-таблицы</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div id="app">
+        <!-- Экран авторизации -->
+        <div id="auth-screen" class="screen">
+            <div class="auth-container">
+                <h1>📊 Spreadsheet App</h1>
+                <p class="subtitle">Веб-редактор таблиц</p>
+                
+                <div class="tabs">
+                    <button class="tab-btn active" data-tab="login">Вход</button>
+                    <button class="tab-btn" data-tab="register">Регистрация</button>
+                </div>
+                
+                <!-- Форма входа -->
+                <form id="login-form" class="auth-form">
+                    <div class="form-group">
+                        <label for="login-username">Имя пользователя</label>
+                        <input type="text" id="login-username" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="login-password">Пароль</label>
+                        <input type="password" id="login-password" required>
+                    </div>
+                    <button type="submit" class="btn-primary">Войти</button>
+                </form>
+                
+                <!-- Форма регистрации -->
+                <form id="register-form" class="auth-form hidden">
+                    <div class="form-group">
+                        <label for="register-username">Имя пользователя</label>
+                        <input type="text" id="register-username" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="register-email">Email</label>
+                        <input type="email" id="register-email" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="register-password">Пароль</label>
+                        <input type="password" id="register-password" required>
+                    </div>
+                    <button type="submit" class="btn-primary">Зарегистрироваться</button>
+                </form>
+                
+                <div id="auth-error" class="error-message hidden"></div>
+            </div>
+        </div>
+        
+        <!-- Основной экран приложения -->
+        <div id="main-screen" class="screen hidden">
+            <header class="header">
+                <div class="header-left">
+                    <h1>📊 Spreadsheet App</h1>
+                </div>
+                <div class="header-right">
+                    <span id="user-info"></span>
+                    <button id="logout-btn" class="btn-secondary">Выход</button>
+                </div>
+            </header>
+            
+            <main class="main-content">
+                <!-- Панель управления таблицами -->
+                <div id="spreadsheets-panel" class="panel">
+                    <div class="panel-header">
+                        <h2>Мои таблицы</h2>
+                        <button id="new-spreadsheet-btn" class="btn-primary">+ Новая таблица</button>
+                    </div>
+                    <div id="spreadsheets-list" class="spreadsheets-list">
+                        <!-- Список таблиц будет загружен динамически -->
+                    </div>
+                </div>
+                
+                <!-- Редактор таблицы -->
+                <div id="editor-panel" class="panel hidden">
+                    <div class="panel-header">
+                        <button id="back-btn" class="btn-secondary">← Назад</button>
+                        <h2 id="spreadsheet-title"></h2>
+                        <div class="toolbar">
+                            <button id="save-btn" class="btn-primary">💾 Сохранить</button>
+                        </div>
+                    </div>
+                    
+                    <div class="formula-bar">
+                        <span id="selected-cell" class="cell-address"></span>
+                        <input type="text" id="formula-input" placeholder="fx" class="formula-input">
+                    </div>
+                    
+                    <div class="spreadsheet-container">
+                        <table id="spreadsheet" class="spreadsheet-table">
+                            <!-- Таблица генерируется динамически -->
+                        </table>
+                    </div>
+                </div>
+            </main>
+        </div>
+        
+        <!-- Модальное окно создания таблицы -->
+        <div id="modal-overlay" class="modal-overlay hidden">
+            <div class="modal">
+                <h3>Новая таблица</h3>
+                <form id="new-spreadsheet-form">
+                    <div class="form-group">
+                        <label for="spreadsheet-name">Название</label>
+                        <input type="text" id="spreadsheet-name" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="spreadsheet-description">Описание</label>
+                        <textarea id="spreadsheet-description" rows="3"></textarea>
+                    </div>
+                    <div class="modal-actions">
+                        <button type="button" id="cancel-modal-btn" class="btn-secondary">Отмена</button>
+                        <button type="submit" class="btn-primary">Создать</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+    
+    <script src="app.js"></script>
+</body>
+</html>
