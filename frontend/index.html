@@ -1,0 +1,964 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TimeTracker Pro - Учет времени и стоимости проектов</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        header {
+            background: white;
+            padding: 20px 30px;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+            margin-bottom: 30px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        header h1 {
+            color: #667eea;
+            font-size: 28px;
+        }
+
+        .nav-tabs {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+
+        .nav-tab {
+            padding: 12px 24px;
+            background: rgba(255,255,255,0.2);
+            border: none;
+            border-radius: 8px;
+            color: white;
+            cursor: pointer;
+            font-size: 14px;
+            transition: all 0.3s;
+        }
+
+        .nav-tab:hover, .nav-tab.active {
+            background: white;
+            color: #667eea;
+        }
+
+        .card {
+            background: white;
+            border-radius: 15px;
+            padding: 25px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+            margin-bottom: 20px;
+        }
+
+        .card h2 {
+            color: #333;
+            margin-bottom: 20px;
+            padding-bottom: 10px;
+            border-bottom: 2px solid #667eea;
+        }
+
+        .dashboard-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+
+        .stat-card {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px;
+            border-radius: 10px;
+            text-align: center;
+        }
+
+        .stat-card h3 {
+            font-size: 36px;
+            margin-bottom: 5px;
+        }
+
+        .stat-card p {
+            opacity: 0.9;
+            font-size: 14px;
+        }
+
+        .form-group {
+            margin-bottom: 15px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 5px;
+            color: #333;
+            font-weight: 500;
+        }
+
+        .form-group input, .form-group select, .form-group textarea {
+            width: 100%;
+            padding: 10px 15px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 14px;
+            transition: border-color 0.3s;
+        }
+
+        .form-group input:focus, .form-group select:focus, .form-group textarea:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .btn {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 600;
+            transition: all 0.3s;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 20px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn-danger {
+            background: #dc3545;
+            color: white;
+        }
+
+        .btn-success {
+            background: #28a745;
+            color: white;
+        }
+
+        .btn-sm {
+            padding: 6px 12px;
+            font-size: 12px;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        th, td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid #e0e0e0;
+        }
+
+        th {
+            background: #f8f9fa;
+            color: #333;
+            font-weight: 600;
+        }
+
+        tr:hover {
+            background: #f8f9fa;
+        }
+
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.5);
+            z-index: 1000;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .modal.active {
+            display: flex;
+        }
+
+        .modal-content {
+            background: white;
+            padding: 30px;
+            border-radius: 15px;
+            max-width: 500px;
+            width: 90%;
+            max-height: 90vh;
+            overflow-y: auto;
+        }
+
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+
+        .modal-close {
+            background: none;
+            border: none;
+            font-size: 24px;
+            cursor: pointer;
+            color: #666;
+        }
+
+        .section {
+            display: none;
+        }
+
+        .section.active {
+            display: block;
+        }
+
+        .time-entry-form {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+        }
+
+        .project-summary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+        }
+
+        .status-badge {
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+
+        .status-active {
+            background: #d4edda;
+            color: #155724;
+        }
+
+        .status-pending {
+            background: #fff3cd;
+            color: #856404;
+        }
+
+        .status-completed {
+            background: #cce5ff;
+            color: #004085;
+        }
+
+        .alert {
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+
+        .alert-success {
+            background: #d4edda;
+            color: #155724;
+        }
+
+        .alert-error {
+            background: #f8d7da;
+            color: #721c24;
+        }
+
+        .hidden {
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>⏱️ TimeTracker Pro</h1>
+            <div id="healthStatus"></div>
+        </header>
+
+        <div class="nav-tabs">
+            <button class="nav-tab active" onclick="showSection('dashboard')">📊 Dashboard</button>
+            <button class="nav-tab" onclick="showSection('clients')">👥 Клиенты</button>
+            <button class="nav-tab" onclick="showSection('projects')">📁 Проекты</button>
+            <button class="nav-tab" onclick="showSection('tasks')">✅ Задачи</button>
+            <button class="nav-tab" onclick="showSection('time')">⏰ Учет времени</button>
+        </div>
+
+        <!-- Dashboard Section -->
+        <div id="dashboard" class="section active">
+            <div class="card">
+                <h2>Общая статистика</h2>
+                <div class="dashboard-grid" id="dashboardStats">
+                    <div class="stat-card">
+                        <h3 id="totalClients">0</h3>
+                        <p>Всего клиентов</p>
+                    </div>
+                    <div class="stat-card">
+                        <h3 id="activeProjects">0</h3>
+                        <p>Активных проектов</p>
+                    </div>
+                    <div class="stat-card">
+                        <h3 id="totalHours">0</h3>
+                        <p>Часов отработано</p>
+                    </div>
+                    <div class="stat-card">
+                        <h3 id="totalRevenue">$0</h3>
+                        <p>Общая выручка</p>
+                    </div>
+                </div>
+                <h3 style="margin-top: 30px; margin-bottom: 15px;">Топ проектов по выручке</h3>
+                <table id="topProjectsTable">
+                    <thead>
+                        <tr>
+                            <th>Проект</th>
+                            <th>Ставка/час</th>
+                            <th>Часов</th>
+                            <th>Сумма</th>
+                        </tr>
+                    </thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Clients Section -->
+        <div id="clients" class="section">
+            <div class="card">
+                <h2>Клиенты</h2>
+                <button class="btn btn-primary" onclick="openModal('clientModal')">+ Добавить клиента</button>
+                <table style="margin-top: 20px;">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Имя</th>
+                            <th>Email</th>
+                            <th>Телефон</th>
+                            <th>Действия</th>
+                        </tr>
+                    </thead>
+                    <tbody id="clientsTable"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Projects Section -->
+        <div id="projects" class="section">
+            <div class="card">
+                <h2>Проекты</h2>
+                <button class="btn btn-primary" onclick="openModal('projectModal')">+ Добавить проект</button>
+                <table style="margin-top: 20px;">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Название</th>
+                            <th>Клиент</th>
+                            <th>Ставка/час</th>
+                            <th>Бюджет</th>
+                            <th>Статус</th>
+                            <th>Действия</th>
+                        </tr>
+                    </thead>
+                    <tbody id="projectsTable"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Tasks Section -->
+        <div id="tasks" class="section">
+            <div class="card">
+                <h2>Задачи</h2>
+                <div class="form-group" style="max-width: 300px;">
+                    <label>Фильтр по проекту:</label>
+                    <select id="taskProjectFilter" onchange="loadTasks()">
+                        <option value="">Все проекты</option>
+                    </select>
+                </div>
+                <button class="btn btn-primary" onclick="openModal('taskModal')">+ Добавить задачу</button>
+                <table style="margin-top: 20px;">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Название</th>
+                            <th>Проект</th>
+                            <th>Статус</th>
+                            <th>Действия</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tasksTable"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Time Entries Section -->
+        <div id="time" class="section">
+            <div class="card">
+                <h2>Учет времени</h2>
+                <div class="time-entry-form">
+                    <h3 style="margin-bottom: 15px;">Новая запись времени</h3>
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px;">
+                        <div class="form-group">
+                            <label>Задача:</label>
+                            <select id="timeTaskSelect"></select>
+                        </div>
+                        <div class="form-group">
+                            <label>Начало:</label>
+                            <input type="datetime-local" id="timeStart">
+                        </div>
+                        <div class="form-group">
+                            <label>Окончание:</label>
+                            <input type="datetime-local" id="timeEnd">
+                        </div>
+                        <div class="form-group">
+                            <label>Описание:</label>
+                            <input type="text" id="timeDescription">
+                        </div>
+                        <div class="form-group" style="display: flex; align-items: flex-end;">
+                            <button class="btn btn-success" onclick="createTimeEntry()">Добавить запись</button>
+                        </div>
+                    </div>
+                </div>
+                <h3 style="margin-top: 30px; margin-bottom: 15px;">История записей</h3>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Задача</th>
+                            <th>Проект</th>
+                            <th>Начало</th>
+                            <th>Окончание</th>
+                            <th>Длительность (мин)</th>
+                            <th>Стоимость</th>
+                            <th>Действия</th>
+                        </tr>
+                    </thead>
+                    <tbody id="timeEntriesTable"></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Client Modal -->
+    <div id="clientModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="clientModalTitle">Добавить клиента</h2>
+                <button class="modal-close" onclick="closeModal('clientModal')">&times;</button>
+            </div>
+            <form id="clientForm" onsubmit="handleClientSubmit(event)">
+                <input type="hidden" id="clientId">
+                <div class="form-group">
+                    <label>Имя *</label>
+                    <input type="text" id="clientName" required>
+                </div>
+                <div class="form-group">
+                    <label>Email</label>
+                    <input type="email" id="clientEmail">
+                </div>
+                <div class="form-group">
+                    <label>Телефон</label>
+                    <input type="text" id="clientPhone">
+                </div>
+                <button type="submit" class="btn btn-primary">Сохранить</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Project Modal -->
+    <div id="projectModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="projectModalTitle">Добавить проект</h2>
+                <button class="modal-close" onclick="closeModal('projectModal')">&times;</button>
+            </div>
+            <form id="projectForm" onsubmit="handleProjectSubmit(event)">
+                <input type="hidden" id="projectId">
+                <div class="form-group">
+                    <label>Название *</label>
+                    <input type="text" id="projectName" required>
+                </div>
+                <div class="form-group">
+                    <label>Клиент *</label>
+                    <select id="projectClient" required></select>
+                </div>
+                <div class="form-group">
+                    <label>Ставка в час ($) *</label>
+                    <input type="number" step="0.01" id="projectHourlyRate" required>
+                </div>
+                <div class="form-group">
+                    <label>Бюджет ($)</label>
+                    <input type="number" step="0.01" id="projectBudget">
+                </div>
+                <div class="form-group">
+                    <label>Описание</label>
+                    <textarea id="projectDescription" rows="3"></textarea>
+                </div>
+                <button type="submit" class="btn btn-primary">Сохранить</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Task Modal -->
+    <div id="taskModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="taskModalTitle">Добавить задачу</h2>
+                <button class="modal-close" onclick="closeModal('taskModal')">&times;</button>
+            </div>
+            <form id="taskForm" onsubmit="handleTaskSubmit(event)">
+                <input type="hidden" id="taskId">
+                <div class="form-group">
+                    <label>Название *</label>
+                    <input type="text" id="taskName" required>
+                </div>
+                <div class="form-group">
+                    <label>Проект *</label>
+                    <select id="taskProject" required></select>
+                </div>
+                <div class="form-group">
+                    <label>Описание</label>
+                    <textarea id="taskDescription" rows="3"></textarea>
+                </div>
+                <button type="submit" class="btn btn-primary">Сохранить</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Project Summary Modal -->
+    <div id="summaryModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Сводка по проекту</h2>
+                <button class="modal-close" onclick="closeModal('summaryModal')">&times;</button>
+            </div>
+            <div id="projectSummaryContent"></div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = '/api';
+
+        // Navigation
+        function showSection(sectionId) {
+            document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+            document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
+            document.getElementById(sectionId).classList.add('active');
+            event.target.classList.add('active');
+            
+            if (sectionId === 'dashboard') loadDashboard();
+            if (sectionId === 'clients') loadClients();
+            if (sectionId === 'projects') loadProjects();
+            if (sectionId === 'tasks') loadTasks();
+            if (sectionId === 'time') loadTimeEntries();
+        }
+
+        // Modal functions
+        function openModal(modalId) {
+            document.getElementById(modalId).classList.add('active');
+            resetForm(modalId.replace('Modal', ''));
+        }
+
+        function closeModal(modalId) {
+            document.getElementById(modalId).classList.remove('active');
+        }
+
+        function resetForm(prefix) {
+            const form = document.getElementById(prefix + 'Form');
+            if (form) form.reset();
+            const hiddenId = document.getElementById(prefix + 'Id');
+            if (hiddenId) hiddenId.value = '';
+            const title = document.getElementById(prefix + 'ModalTitle');
+            if (title) title.textContent = prefix.charAt(0).toUpperCase() + prefix.slice(1) + ' - Добавить';
+        }
+
+        // API helpers
+        async function api(endpoint, options = {}) {
+            try {
+                const response = await fetch(API_BASE + endpoint, {
+                    ...options,
+                    headers: {
+                        'Content-Type': 'application/json',
+                        ...options.headers
+                    }
+                });
+                if (!response.ok) {
+                    const error = await response.json();
+                    throw new Error(error.detail || 'Ошибка запроса');
+                }
+                return await response.json();
+            } catch (error) {
+                alert(error.message);
+                throw error;
+            }
+        }
+
+        // Dashboard
+        async function loadDashboard() {
+            try {
+                const data = await api('/dashboard');
+                document.getElementById('totalClients').textContent = data.total_clients;
+                document.getElementById('activeProjects').textContent = data.active_projects;
+                document.getElementById('totalHours').textContent = data.total_hours_tracked;
+                document.getElementById('totalRevenue').textContent = '$' + data.total_revenue.toLocaleString();
+                
+                const tbody = document.querySelector('#topProjectsTable tbody');
+                tbody.innerHTML = data.top_projects.map(p => `
+                    <tr>
+                        <td>${p.name}</td>
+                        <td>$${p.hourly_rate}</td>
+                        <td>${p.total_hours}</td>
+                        <td>$${p.total_cost.toLocaleString()}</td>
+                    </tr>
+                `).join('');
+            } catch (e) { console.error(e); }
+        }
+
+        // Clients
+        async function loadClients() {
+            try {
+                const data = await api('/clients');
+                const tbody = document.getElementById('clientsTable');
+                tbody.innerHTML = data.clients.map(c => `
+                    <tr>
+                        <td>${c.id}</td>
+                        <td>${c.name}</td>
+                        <td>${c.contact_email || '-'}</td>
+                        <td>${c.contact_phone || '-'}</td>
+                        <td>
+                            <button class="btn btn-sm btn-primary" onclick="editClient(${c.id})">✏️</button>
+                            <button class="btn btn-sm btn-danger" onclick="deleteClient(${c.id})">🗑️</button>
+                        </td>
+                    </tr>
+                `).join('');
+            } catch (e) { console.error(e); }
+        }
+
+        async function handleClientSubmit(e) {
+            e.preventDefault();
+            const id = document.getElementById('clientId').value;
+            const clientData = {
+                name: document.getElementById('clientName').value,
+                contact_email: document.getElementById('clientEmail').value,
+                contact_phone: document.getElementById('clientPhone').value
+            };
+
+            try {
+                if (id) {
+                    await api(`/clients/${id}`, { method: 'PUT', body: JSON.stringify(clientData) });
+                } else {
+                    await api('/clients', { method: 'POST', body: JSON.stringify(clientData) });
+                }
+                closeModal('clientModal');
+                loadClients();
+            } catch (e) { console.error(e); }
+        }
+
+        async function editClient(id) {
+            try {
+                const data = await api(`/clients/${id}`);
+                const c = data.client;
+                document.getElementById('clientId').value = c.id;
+                document.getElementById('clientName').value = c.name;
+                document.getElementById('clientEmail').value = c.contact_email || '';
+                document.getElementById('clientPhone').value = c.contact_phone || '';
+                document.getElementById('clientModalTitle').textContent = 'Редактировать клиента';
+                openModal('clientModal');
+            } catch (e) { console.error(e); }
+        }
+
+        async function deleteClient(id) {
+            if (confirm('Вы уверены?')) {
+                try {
+                    await api(`/clients/${id}`, { method: 'DELETE' });
+                    loadClients();
+                } catch (e) { console.error(e); }
+            }
+        }
+
+        // Projects
+        async function loadProjects() {
+            try {
+                const [projectsData, clientsData] = await Promise.all([
+                    api('/projects'),
+                    api('/clients')
+                ]);
+                
+                // Update client dropdown
+                const clientSelect = document.getElementById('projectClient');
+                clientSelect.innerHTML = '<option value="">Выберите клиента</option>' + 
+                    clientsData.clients.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
+                
+                // Update task filter
+                const taskFilter = document.getElementById('taskProjectFilter');
+                taskFilter.innerHTML = '<option value="">Все проекты</option>' + 
+                    projectsData.projects.map(p => `<option value="${p.id}">${p.name}</option>`).join('');
+                
+                // Update task project select
+                const taskProject = document.getElementById('taskProject');
+                taskProject.innerHTML = '<option value="">Выберите проект</option>' + 
+                    projectsData.projects.map(p => `<option value="${p.id}">${p.name}</option>`).join('');
+                
+                // Update time task select later
+                updateTaskSelect();
+                
+                const tbody = document.getElementById('projectsTable');
+                tbody.innerHTML = projectsData.projects.map(p => `
+                    <tr>
+                        <td>${p.id}</td>
+                        <td>${p.name}</td>
+                        <td>${p.client_name || '-'}</td>
+                        <td>$${p.hourly_rate}</td>
+                        <td>${p.budget ? '$' + p.budget : '-'}</td>
+                        <td><span class="status-badge status-${p.status}">${p.status}</span></td>
+                        <td>
+                            <button class="btn btn-sm btn-primary" onclick="editProject(${p.id})">✏️</button>
+                            <button class="btn btn-sm btn-success" onclick="showProjectSummary(${p.id})">📊</button>
+                            <button class="btn btn-sm btn-danger" onclick="deleteProject(${p.id})">🗑️</button>
+                        </td>
+                    </tr>
+                `).join('');
+            } catch (e) { console.error(e); }
+        }
+
+        async function handleProjectSubmit(e) {
+            e.preventDefault();
+            const id = document.getElementById('projectId').value;
+            const projectData = {
+                name: document.getElementById('projectName').value,
+                client_id: parseInt(document.getElementById('projectClient').value),
+                hourly_rate: parseFloat(document.getElementById('projectHourlyRate').value),
+                budget: document.getElementById('projectBudget').value ? parseFloat(document.getElementById('projectBudget').value) : null,
+                description: document.getElementById('projectDescription').value
+            };
+
+            try {
+                if (id) {
+                    await api(`/projects/${id}`, { method: 'PUT', body: JSON.stringify(projectData) });
+                } else {
+                    await api('/projects', { method: 'POST', body: JSON.stringify(projectData) });
+                }
+                closeModal('projectModal');
+                loadProjects();
+            } catch (e) { console.error(e); }
+        }
+
+        async function editProject(id) {
+            try {
+                const data = await api(`/projects/${id}`);
+                const p = data.project;
+                document.getElementById('projectId').value = p.id;
+                document.getElementById('projectName').value = p.name;
+                document.getElementById('projectClient').value = p.client_id;
+                document.getElementById('projectHourlyRate').value = p.hourly_rate;
+                document.getElementById('projectBudget').value = p.budget || '';
+                document.getElementById('projectDescription').value = p.description || '';
+                document.getElementById('projectModalTitle').textContent = 'Редактировать проект';
+                openModal('projectModal');
+            } catch (e) { console.error(e); }
+        }
+
+        async function deleteProject(id) {
+            if (confirm('Вы уверены?')) {
+                try {
+                    await api(`/projects/${id}`, { method: 'DELETE' });
+                    loadProjects();
+                } catch (e) { console.error(e); }
+            }
+        }
+
+        async function showProjectSummary(id) {
+            try {
+                const data = await api(`/projects/${id}/summary`);
+                const content = document.getElementById('projectSummaryContent');
+                content.innerHTML = `
+                    <div class="project-summary">
+                        <h3>${data.project.name}</h3>
+                        <p>Клиент: ${data.project.client_name}</p>
+                        <p style="margin-top: 15px;"><strong>Всего задач:</strong> ${data.tasks_count}</p>
+                        <p><strong>Отработано часов:</strong> ${data.total_hours}</p>
+                        <p><strong>Стоимость работ:</strong> $${data.total_cost.toLocaleString()}</p>
+                        ${data.budget ? `<p><strong>Бюджет:</strong> $${data.budget.toLocaleString()}</p>
+                        <p><strong>Остаток бюджета:</strong> $${data.budget_remaining.toLocaleString()}</p>` : ''}
+                    </div>
+                `;
+                openModal('summaryModal');
+            } catch (e) { console.error(e); }
+        }
+
+        // Tasks
+        async function loadTasks() {
+            const projectId = document.getElementById('taskProjectFilter').value;
+            try {
+                const url = projectId ? `/tasks?project_id=${projectId}` : '/tasks';
+                const data = await api(url);
+                const tbody = document.getElementById('tasksTable');
+                tbody.innerHTML = data.tasks.map(t => `
+                    <tr>
+                        <td>${t.id}</td>
+                        <td>${t.name}</td>
+                        <td>${t.project_name || '-'}</td>
+                        <td><span class="status-badge status-${t.status}">${t.status}</span></td>
+                        <td>
+                            <button class="btn btn-sm btn-primary" onclick="editTask(${t.id})">✏️</button>
+                            <button class="btn btn-sm btn-danger" onclick="deleteTask(${t.id})">🗑️</button>
+                        </td>
+                    </tr>
+                `).join('');
+                updateTaskSelect();
+            } catch (e) { console.error(e); }
+        }
+
+        async function updateTaskSelect() {
+            try {
+                const data = await api('/tasks');
+                const select = document.getElementById('timeTaskSelect');
+                select.innerHTML = '<option value="">Выберите задачу</option>' + 
+                    data.tasks.map(t => `<option value="${t.id}">${t.name} (${t.project_name || '?'})</option>`).join('');
+            } catch (e) { console.error(e); }
+        }
+
+        async function handleTaskSubmit(e) {
+            e.preventDefault();
+            const id = document.getElementById('taskId').value;
+            const taskData = {
+                name: document.getElementById('taskName').value,
+                project_id: parseInt(document.getElementById('taskProject').value),
+                description: document.getElementById('taskDescription').value
+            };
+
+            try {
+                if (id) {
+                    await api(`/tasks/${id}`, { method: 'PUT', body: JSON.stringify(taskData) });
+                } else {
+                    await api('/tasks', { method: 'POST', body: JSON.stringify(taskData) });
+                }
+                closeModal('taskModal');
+                loadTasks();
+            } catch (e) { console.error(e); }
+        }
+
+        async function editTask(id) {
+            try {
+                const data = await api(`/tasks/${id}`);
+                const t = data.task;
+                document.getElementById('taskId').value = t.id;
+                document.getElementById('taskName').value = t.name;
+                document.getElementById('taskProject').value = t.project_id;
+                document.getElementById('taskDescription').value = t.description || '';
+                document.getElementById('taskModalTitle').textContent = 'Редактировать задачу';
+                openModal('taskModal');
+            } catch (e) { console.error(e); }
+        }
+
+        async function deleteTask(id) {
+            if (confirm('Вы уверены?')) {
+                try {
+                    await api(`/tasks/${id}`, { method: 'DELETE' });
+                    loadTasks();
+                } catch (e) { console.error(e); }
+            }
+        }
+
+        // Time Entries
+        async function loadTimeEntries() {
+            try {
+                const data = await api('/time-entries');
+                const tbody = document.getElementById('timeEntriesTable');
+                tbody.innerHTML = data.time_entries.map(e => `
+                    <tr>
+                        <td>${e.id}</td>
+                        <td>${e.task_name || '-'}</td>
+                        <td>${e.project_name || '-'}</td>
+                        <td>${new Date(e.start_time).toLocaleString()}</td>
+                        <td>${e.end_time ? new Date(e.end_time).toLocaleString() : '-'}</td>
+                        <td>${e.duration_minutes || 0}</td>
+                        <td>$${e.cost ? e.cost.toFixed(2) : '0.00'}</td>
+                        <td>
+                            <button class="btn btn-sm btn-danger" onclick="deleteTimeEntry(${e.id})">🗑️</button>
+                        </td>
+                    </tr>
+                `).join('');
+            } catch (e) { console.error(e); }
+        }
+
+        async function createTimeEntry() {
+            const task_id = document.getElementById('timeTaskSelect').value;
+            const start_time = document.getElementById('timeStart').value;
+            const end_time = document.getElementById('timeEnd').value;
+            const description = document.getElementById('timeDescription').value;
+
+            if (!task_id || !start_time) {
+                alert('Выберите задачу и укажите время начала');
+                return;
+            }
+
+            const entryData = {
+                task_id: parseInt(task_id),
+                start_time: start_time,
+                end_time: end_time || null,
+                description: description
+            };
+
+            try {
+                await api('/time-entries', { method: 'POST', body: JSON.stringify(entryData) });
+                document.getElementById('timeStart').value = '';
+                document.getElementById('timeEnd').value = '';
+                document.getElementById('timeDescription').value = '';
+                loadTimeEntries();
+            } catch (e) { console.error(e); }
+        }
+
+        async function deleteTimeEntry(id) {
+            if (confirm('Вы уверены?')) {
+                try {
+                    await api(`/time-entries/${id}`, { method: 'DELETE' });
+                    loadTimeEntries();
+                } catch (e) { console.error(e); }
+            }
+        }
+
+        // Health check
+        async function checkHealth() {
+            try {
+                const data = await api('/health');
+                document.getElementById('healthStatus').innerHTML = 
+                    `<span style="color: #28a745;">● API активен</span>`;
+            } catch (e) {
+                document.getElementById('healthStatus').innerHTML = 
+                    `<span style="color: #dc3545;">● API недоступен</span>`;
+            }
+        }
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', () => {
+            checkHealth();
+            loadDashboard();
+            
+            // Set default time values
+            const now = new Date();
+            now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
+            document.getElementById('timeStart').value = now.toISOString().slice(0, 16);
+        });
+    </script>
+</body>
+</html>
