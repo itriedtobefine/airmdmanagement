@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="MTS Business Data Management - Платформа управления данными предприятия с более чем 90 функциональными возможностями">
+    <meta name="keywords" content="MDM, управление данными, MTS, бизнес данные, мастер данные, data management">
+    <title>MTS BDM | Business Data Management Platform</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <!-- Navigation -->
+    <nav class="nav">
+        <div class="nav-container">
+            <a href="#" class="nav-logo">MTS BDM</a>
+            <ul class="nav-menu">
+                <li><a href="#features" class="nav-link">Возможности</a></li>
+                <li><a href="#categories" class="nav-link">Категории</a></li>
+                <li><a href="#contact" class="nav-link">Контакты</a></li>
+            </ul>
+        </div>
+    </nav>
+
+    <!-- Hero Section -->
+    <header class="hero" id="features">
+        <div class="hero-content">
+            <div class="hero-logo">MTS BDM</div>
+            <h1 class="hero-title">Business Data Management Platform</h1>
+            <p class="hero-subtitle">
+                Комплексная платформа управления мастер-данными предприятия 
+                с поддержкой гибридных архитектур, машинного обучения и регуляторного соответствия
+            </p>
+            <div class="hero-stats">
+                <div class="stat-item">
+                    <span class="stat-number" data-target="93">0</span>
+                    <span class="stat-label">Функций</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-number" data-target="10">0</span>
+                    <span class="stat-label">Категорий</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-number" data-target="50">0</span>
+                    <span class="stat-label">Продуктов</span>
+                </div>
+            </div>
+        </div>
+        <div class="scroll-indicator">
+            <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                <path d="M12 5v14M5 12l7 7 7-7"/>
+            </svg>
+        </div>
+    </header>
+
+    <!-- Search and Filter Section -->
+    <div class="search-container" id="categories">
+        <div class="search-box">
+            <svg class="search-icon" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                <circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/>
+            </svg>
+            <input type="text" class="search-input" id="searchInput" placeholder="Поиск функциональных возможностей...">
+        </div>
+    </div>
+
+    <!-- Filter Tabs -->
+    <div class="filter-tabs">
+        <button class="filter-tab active" data-category="all">Все</button>
+        <button class="filter-tab" data-category="АРХИТЕКТУРА И РАЗВЕРТЫВАНИЕ">Архитектура</button>
+        <button class="filter-tab" data-category="МОДЕЛИРОВАНИЕ ДАННЫХ И МЕТАДАННЫЕ">Моделирование</button>
+        <button class="filter-tab" data-category="ИНТЕГРАЦИЯ И ЗАГРУЗКА ДАННЫХ">Интеграция</button>
+        <button class="filter-tab" data-category="КАЧЕСТВО ДАННЫХ И СОПОСТАВЛЕНИЕ">Качество</button>
+        <button class="filter-tab" data-category="УПРАВЛЕНИЕ ПРОЦЕССАМИ И СТЬЮАРДСТВО">Процессы</button>
+        <button class="filter-tab" data-category="БЕЗОПАСНОСТЬ, КОМПЛАЕНС И АУДИТ">Безопасность</button>
+        <button class="filter-tab" data-category="ПУБЛИКАЦИЯ, API И СОБЫТИЯ">API</button>
+        <button class="filter-tab" data-category="ИНТЕГРАЦИЯ, МОНИТОРИНГ И НАБЛЮДАЕМОСТЬ">Мониторинг</button>
+        <button class="filter-tab" data-category="РАСШИРЯЕМОСТЬ И ЭКОСИСТЕМА">Экосистема</button>
+        <button class="filter-tab" data-category="СПЕЦИАЛИЗИРОВАННЫЕ И ИССЛЕДОВАТЕЛЬСКИЕ ФУНКЦИИ">Спецфункции</button>
+    </div>
+
+    <!-- Main Content - Categories and Features will be dynamically loaded here -->
+    <main id="mainContent"></main>
+
+    <!-- CTA Section -->
+    <section class="cta-section" id="contact">
+        <h2 class="cta-title">Готовы начать?</h2>
+        <p class="cta-text">
+            Свяжитесь с нами для демонстрации платформы и обсуждения ваших потребностей в управлении данными
+        </p>
+        <a href="mailto:bdm@mts.ru" class="cta-button">Связаться с нами</a>
+    </section>
+
+    <!-- Footer -->
+    <footer class="footer">
+        <div class="footer-content">
+            <div class="footer-section">
+                <h4>MTS BDM</h4>
+                <p>
+                    Платформа управления мастер-данными нового поколения 
+                    для предприятий любого масштаба
+                </p>
+            </div>
+            <div class="footer-section">
+                <h4>Категории</h4>
+                <a href="#category-0">Архитектура и развертывание</a>
+                <a href="#category-1">Моделирование данных</a>
+                <a href="#category-2">Интеграция данных</a>
+                <a href="#category-3">Качество данных</a>
+            </div>
+            <div class="footer-section">
+                <h4>Документация</h4>
+                <a href="#">Руководство пользователя</a>
+                <a href="#">API документация</a>
+                <a href="#">Технические требования</a>
+            </div>
+            <div class="footer-section">
+                <h4>Контакты</h4>
+                <p>bdm@mts.ru</p>
+                <p>+7 (495) 766-01-66</p>
+                <p>Москва, ул. Маркса, 14</p>
+            </div>
+        </div>
+        <div class="footer-bottom">
+            <p>&copy; 2025 MTS Business Data Management. Все права защищены.</p>
+        </div>
+    </footer>
+
+    <script src="js/main.js"></script>
+</body>
+</html>

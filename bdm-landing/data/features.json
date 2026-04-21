@@ -1,0 +1,527 @@
+[
+  {
+    "category": "АРХИТЕКТУРА И РАЗВЕРТЫВАНИЕ",
+    "features": [
+      {
+        "name": "Гибридная архитектура развертывания",
+        "description": "Поддержка нескольких режимов работы MDM в одном инстансе с динамическим переключением маршрутизации запросов и синхронизации между мастер-репозиторием и операционными системами",
+        "products": "Informatica MDM, IBM InfoSphere MDM, SAP MDG, Semarchy xDM, Reltio, Stibo STEP"
+      },
+      {
+        "name": "Поддержка мультиарендности",
+        "description": "Логическая изоляция данных, конфигураций и пользователей через tenant-идентификаторы с отдельными квотами и политиками",
+        "products": "Reltio, Informatica MDM Cloud, CluedIn, Ataccama ONE, MultiTenant MDM Blueprint (прототип)"
+      },
+      {
+        "name": "Поддержка динамического масштабирования вычислений",
+        "description": "Автоматическое выделение ресурсов под batch-матчинг, real-time-интеграцию и аналитику с поддержкой Kubernetes HPA и serverless triggers",
+        "products": "Reltio, Informatica MDM Cloud, Ataccama ONE, Elastic MDM Architecture (open-source)"
+      },
+      {
+        "name": "Интеграция с системами управления данными для multi-cloud",
+        "description": "Абстракция хранения и вычислений, поддержка AWS/Azure/GCP, автоматическая миграция и cost optimization",
+        "products": "Reltio Cloud, Informatica MDM, Ataccama ONE, Multi-Cloud MDM Architecture (open-source)"
+      },
+      {
+        "name": "Интеграция с системами управления данными для hybrid environments",
+        "description": "Поддержка on-prem, cloud и edge, синхронизация, conflict resolution и единое управление",
+        "products": "Informatica MDM, IBM InfoSphere MDM, SAP MDG, Hybrid MDM Architecture (open-source)"
+      },
+      {
+        "name": "Поддержка edge-синхронизации",
+        "description": "Легковесный агент для оффлайн-устройств с локальным кэшем, conflict resolution по timestamp/version vector и фоновой репликацией",
+        "products": "Pimcore, Hop Edge Sync, EdgeMDM Prototype (прототип), Open Sync Framework (open-source)"
+      },
+      {
+        "name": "Автоматическое управление конфигурацией среды",
+        "description": "IaC-подход к развертыванию MDM (Terraform, Helm), управление секретами, network policies и compliance-as-code",
+        "products": "Reltio Cloud, Informatica MDM, Ataccama ONE, IaC MDM Templates, Terraform Provider for MDM (open-source)"
+      }
+    ]
+  },
+  {
+    "category": "МОДЕЛИРОВАНИЕ ДАННЫХ И МЕТАДАННЫЕ",
+    "features": [
+      {
+        "name": "Многослойная онтологическая модель данных",
+        "description": "Разделение схемы на логический, концептуальный и физический уровни с автоматической генерацией DDL и поддержкой семантических связей через RDF/OWL",
+        "products": "SAP MDG, TIBCO EBX, Stibo STEP, Reltio, CluedIn, Apache Atlas"
+      },
+      {
+        "name": "Мета-моделирование с поддержкой наследования",
+        "description": "Определение типов данных с атрибутами, примитивными и сложными типами, возможностью наследования от супертипов",
+        "products": "Apache Atlas, Pimcore, Ataccama ONE, Informatica MDM, SAP MDG, Reltio, Profisee, AtroCore, Stibo STEP"
+      },
+      {
+        "name": "Графовое моделирование связей сущностей",
+        "description": "Хранение мастер-объектов и отношений в нативном графовом движке с поддержкой обходов, транзитивных замыканий и визуализации зависимостей",
+        "products": "Reltio, CluedIn, IBM InfoSphere MDM, Neo4j MDM Blueprint (прототип), TigerGraph"
+      },
+      {
+        "name": "Динамическое создание классификаций",
+        "description": "Присвоение тегов (PII, SENSITIVE, EXPIRES_ON) с атрибутами к сущностям для упрощения поиска и безопасности",
+        "products": "Apache Atlas, Informatica MDM, Reltio, Profisee, Ataccama ONE, SAP MDG"
+      },
+      {
+        "name": "Графический редактор моделей данных",
+        "description": "Визуальное проектирование сущностей, атрибутов и отношений без написания кода",
+        "products": "Pimcore, Informatica MDM, SAP MDG, Profisee, Reltio, Stibo STEP, AtroCore"
+      },
+      {
+        "name": "API-first архитектура моделей",
+        "description": "Программное управление схемами через REST/GraphQL для интеграции с CI/CD",
+        "products": "Pimcore, Reltio, Informatica MDM, Profisee, AtroCore, Ataccama ONE, Semarchy xDM"
+      },
+      {
+        "name": "Автоматическая эволюция схемы",
+        "description": "Обнаружение новых полей в потоках данных, предложение маппинга, безопасное применение изменений без прерывания работы",
+        "products": "Reltio, CluedIn, Informatica MDM, Apache Atlas Integration (open-source), Schema Evolution MDM (прототип)"
+      },
+      {
+        "name": "Поддержка мультиязычных атрибутов",
+        "description": "Хранение локализованных значений с автоматическим fallback, переводом через внешние API и проверкой консистентности",
+        "products": "Stibo STEP, SAP MDG, Pimcore, Reltio, Multilingual MDM Spec (open-source)"
+      },
+      {
+        "name": "Декларативное управление иерархиями",
+        "description": "Определение древовидных и сетевых структур через конфигурацию узлов, типов связей и правил наследования атрибутов с автоматическим пересчетом агрегатов",
+        "products": "SAP MDG, Stibo STEP, IBM InfoSphere MDM, Profisee, TIBCO EBX, Reltio, Informatica MDM"
+      },
+      {
+        "name": "Поддержка битемпоральности (Temporal Data / Bitemporality)",
+        "description": "Разделение времени действия факта в реальном мире (valid time) и времени записи этого факта в систему (system time) для финансового и юридического комплаенса",
+        "products": "TIBCO EBX, Informatica MDM, Oracle MDM, Stibo STEP"
+      }
+    ]
+  },
+  {
+    "category": "ИНТЕГРАЦИЯ И ЗАГРУЗКА ДАННЫХ",
+    "features": [
+      {
+        "name": "Многопоточная пакетная загрузка с чекпоинтами",
+        "description": "Распределенная обработка входных файлов через фреймворк типа Apache Spark/Flink с возможностью возобновления с последнего сохраненного состояния и валидацией схемы на лету",
+        "products": "Informatica MDM, Talend/Qlik Data Fabric, Ataccama ONE, Pimcore, Apache Hop"
+      },
+      {
+        "name": "Инкрементальная синхронизация через CDC",
+        "description": "Подписка на журналы транзакций СУБД (Debezium, GoldenGate, Qlik Replicate) с применением delta-apply к мастер-репозиторию и поддержкой exactly-once семантики",
+        "products": "Oracle MDM, SAP MDG, Reltio, Informatica MDM, CluedIn, Open CDC MDM Stack (прототип)"
+      },
+      {
+        "name": "Предварительно настроенные коннекторы",
+        "description": "Готовые адаптеры для популярных источников (ERP, CRM, базы данных, облачные хранилища) с поддержкой batch и real-time ingestion",
+        "products": "Informatica MDM, Profisee, Reltio, SAP MDG, Stibo STEP, Ataccama ONE, Pimcore, MuleSoft"
+      },
+      {
+        "name": "Виртуализация данных (Data Virtualization)",
+        "description": "Возможность querying данных из MDM без физического копирования в hub, создание виртуальных представлений, объединяющих данные из MDM и внешних источников в реальном времени",
+        "products": "Denodo, Informatica Data Virtualization, TIBCO Data Virtualization, Stibo STEP"
+      },
+      {
+        "name": "Детекция изменений на уровне атрибутов",
+        "description": "Отслеживание дельты при загрузке с возможностью исключения атрибутов из триггеров обработки",
+        "products": "Ataccama ONE, Reltio, Informatica MDM, Profisee, SAP MDG"
+      },
+      {
+        "name": "Самостоятельное обогащение из внешних источников",
+        "description": "Конфигурируемые коннекторы к открытым реестрам, API и веб-скраперам с автоматическим маппингом и проверкой доверия источника",
+        "products": "Reltio, CluedIn, Pimcore, Ataccama ONE, Data Enrichment Pipeline (open-source stack)"
+      },
+      {
+        "name": "Федеративный поиск без перемещения данных",
+        "description": "Индексация метаданных и указателей на распределенные источники с выполнением запросов на стороне провайдеров и агрегацией результатов",
+        "products": "CluedIn, IBM InfoSphere MDM, Informatica MDM, Federated MDM Architecture (прототип)"
+      },
+      {
+        "name": "Поддержка кросс-доменной синхронизации в реальном времени",
+        "description": "Event-driven репликация изменений между доменами с гарантией порядка, дедупликацией и conflict resolution",
+        "products": "Reltio, CluedIn, IBM InfoSphere MDM, Real-Time Sync MDM (open-source)"
+      },
+      {
+        "name": "Поддержка кросс-доменной интеграции с legacy systems",
+        "description": "Коннекторы к mainframe, COBOL, flat files, custom protocols с трансляцией, validation и mapping",
+        "products": "Informatica MDM, IBM InfoSphere MDM, SAP MDG, Legacy Integration MDM (open-source)"
+      },
+      {
+        "name": "Мультидоменная координация",
+        "description": "Единый репозиторий с изолированными доменами (клиент, продукт, поставщик) и кросс-доменными связями через глобальные идентификаторы",
+        "products": "Informatica MDM, IBM InfoSphere MDM, SAP MDG, Reltio, Profisee, TIBCO EBX, Stibo STEP"
+      },
+      {
+        "name": "Обработка неструктурированных вложений",
+        "description": "Привязка документов, изображений и JSON-блоков к мастер-объектам с извлечением метаданных через OCR/NLP и индексацией",
+        "products": "Reltio, Pimcore, Stibo STEP, CluedIn, Unstructured MDM Extension"
+      }
+    ]
+  },
+  {
+    "category": "КАЧЕСТВО ДАННЫХ И СОПОСТАВЛЕНИЕ",
+    "features": [
+      {
+        "name": "Правило-базированное разрешение дубликатов",
+        "description": "Конфигурация детерминированных правил сопоставления (exact, fuzzy, phonetic, custom regex) с весовыми коэффициентами и пороговыми значениями уверенности",
+        "products": "Informatica MDM, IBM InfoSphere MDM, SAP MDG, Profisee, TIBCO EBX, Semarchy xDM, Stibo STEP"
+      },
+      {
+        "name": "Машинное обучение для entity resolution",
+        "description": "Обучение моделей на размеченных парах записей с использованием эмбеддингов, active learning и автоматической калибровки порогов, с возможностью человеческого подтверждения",
+        "products": "Reltio, CluedIn, Precisely/Tamr, Ataccama ONE, AI-MDM Framework (прототип), OpenRefine + Scikit-learn Pipeline (open-source stack)"
+      },
+      {
+        "name": "Контекстно-зависимая нормализация адресов и имен",
+        "description": "Интеграция внешних сервисов геокодинга и лингвистических библиотек с применением региональных правил форматирования и обратной транслитерации",
+        "products": "Informatica MDM, SAP MDG, Reltio, Pimcore, Ataccama ONE, OpenStreetMap Address MDM Extension (open-source)"
+      },
+      {
+        "name": "Автоматическое выявление аномалий качества",
+        "description": "Профилирование распределений, контроль уникальности, проверка referential integrity и статистический выброс с генерацией тикетов на исправление",
+        "products": "Ataccama ONE, Informatica MDM, Profisee, Reltio, Talend/Qlik, OpenRefine Quality Rules (open-source)"
+      },
+      {
+        "name": "Автоматическое присвоение Golden Record",
+        "description": "Алгоритм выбора канонической версии на основе доверия источника, свежести, полноты и бизнес-правил с возможностью ручного override",
+        "products": "Informatica MDM, Reltio, Profisee, Ataccama ONE, CluedIn, Golden Record Engine (open-source)"
+      },
+      {
+        "name": "Автоматическое разрешение конфликтов при слиянии",
+        "description": "Применение стратегий latest, source-priority, voting, ML-based с возможностью кастомных скриптов и журналированием принятых решений",
+        "products": "Profisee, Reltio, Informatica MDM, CluedIn, Conflict Resolution Engine (open-source)"
+      },
+      {
+        "name": "Поддержка кросс-доменных правил качества",
+        "description": "Валидация данных на стыке доменов с проверкой referential integrity, согласованностью кодов и бизнес-логикой",
+        "products": "Informatica MDM, IBM InfoSphere MDM, Semarchy xDM, Cross-Domain Quality Rules (open-source)"
+      },
+      {
+        "name": "Динамическая конфигурация матчинг-профилей",
+        "description": "UI-конструктор правил сопоставления с предпросмотром результатов, A/B тестированием профилей и автоматическим подбором весов",
+        "products": "CluedIn, Reltio, Ataccama ONE, Profisee, Matching Configurator (open-source)"
+      },
+      {
+        "name": "Поддержка федеративного матчинга",
+        "description": "Выполнение сравнения записей на стороне источников с передачей только скоров и хешей для минимизации передачи PII",
+        "products": "CluedIn, Federated Matching MDM (прототип), Privacy-Preserving MDM Research (прототип)"
+      },
+      {
+        "name": "Кросс-платформенная идентификация",
+        "description": "Сопоставление сущностей по косвенным признакам (email, телефон, cookie, device ID) с вероятностным скорингом и privacy-preserving хешированием",
+        "products": "Reltio, CluedIn, Precisely/Tamr, CrossID MDM (прототип)"
+      }
+    ]
+  },
+  {
+    "category": "УПРАВЛЕНИЕ ПРОЦЕССАМИ И СТЬЮАРДСТВО",
+    "features": [
+      {
+        "name": "Рабочий процесс утверждения с эскалацией",
+        "description": "BPMN-совместимый движок с ролевой маршрутизацией, таймаутами, параллельными шлюзами и автоматическим делегированием при отсутствии ответа",
+        "products": "SAP MDG, IBM InfoSphere MDM, Profisee, Ataccama ONE, Camunda MDM Integration (open-source), Semarchy xDM, Stibo STEP"
+      },
+      {
+        "name": "Динамическая генерация форм стюардов",
+        "description": "Рендеринг UI-компонентов на основе метаданных схемы с условной видимостью, валидацией на клиенте и offline-режимом",
+        "products": "Profisee, Semarchy xDM, TIBCO EBX, Pimcore, React-MDM UI Kit (open-source)"
+      },
+      {
+        "name": "Динамическое управление жизненным циклом записей",
+        "description": "Автоматические переходы состояний (активно, архив, заблокировано) по триггерам времени, событий или правил комплаенса",
+        "products": "SAP MDG, Informatica MDM, Profisee, TIBCO EBX, Lifecycle MDM Controller (прототип), Pimcore"
+      },
+      {
+        "name": "Управление справочными данными",
+        "description": "Хранение кодовых таблиц, валидация входов, версионирование справочников и синхронизация с внешними классификаторами (ISO, UNSPSC, NACE)",
+        "products": "SAP MDG, Stibo STEP, TIBCO EBX, Ataccama ONE, Informatica MDM, Reference Data Manager (open-source)"
+      },
+      {
+        "name": "Декларативная маршрутизация данных",
+        "description": "Определение правил распределения мастер-записей по системам на основе тегов, регионов или бизнес-юнитов с поддержкой dry-run",
+        "products": "Semarchy xDM, Informatica MDM, SAP MDG, Routing MDM Engine (прототип)"
+      },
+      {
+        "name": "Поддержка кросс-доменных workflow",
+        "description": "Согласование изменений затрагивающих несколько доменов с параллельными approval chains, dependency checks и rollback policies",
+        "products": "IBM InfoSphere MDM, SAP MDG, Profisee, Cross-Domain Workflow Engine (open-source)"
+      },
+      {
+        "name": "Автоматическое управление версиями бизнес-правил",
+        "description": "Git-like ветвление правил, code review, automated testing и deployment pipeline с rollback capability",
+        "products": "TIBCO EBX, Semarchy xDM, Profisee, Rule Version Control (open-source)"
+      },
+      {
+        "name": "Версионирование с точечным восстановлением состояний",
+        "description": "Сохранение снапшотов каждой транзакции в immutable-хранилище с поддержкой Git-like ветвления и слияния для сценариев what-if анализа",
+        "products": "Informatica MDM, Reltio, CluedIn, Semarchy xDM, TIBCO EBX, GitMDM"
+      },
+      {
+        "name": "Автоматическое управление lifecycle политик",
+        "description": "Версионирование правил, A/B тестирование, автоматический rollback при деградации KPI и аудит изменений политик",
+        "products": "Reltio, Ataccama ONE, Informatica MDM, Policy Lifecycle Manager"
+      }
+    ]
+  },
+  {
+    "category": "БЕЗОПАСНОСТЬ, КОМПЛАЕНС И АУДИТ",
+    "features": [
+      {
+        "name": "Политики доступа на уровне атрибутов",
+        "description": "Динамическая фильтрация запросов через ABAC/RBAC с применением масок данных, токенизации и шифрования столбцов на лету",
+        "products": "Oracle MDM, SAP MDG, Reltio, Ataccama ONE, TIBCO EBX, Open Policy Agent MDM Adapter (open-source), Pimcore"
+      },
+      {
+        "name": "Fine-grained RBAC до уровня поля",
+        "description": "Разграничение прав доступа к сущностям, атрибутам и операциям с интеграцией внешних провайдеров аутентификации (SSO, LDAP, SAML, OAuth)",
+        "products": "Pimcore, Informatica MDM, SAP MDG, Reltio, Profisee, Ataccama ONE, AtroCore, Stibo STEP"
+      },
+      {
+        "name": "Автоматическое управление доступом на основе контекста",
+        "description": "Динамическое применение политик доступа в зависимости от роли, устройства, локации и времени с поддержкой step-up authentication",
+        "products": "Oracle MDM, Reltio, Ataccama ONE, Context-Aware Access MDM, Open Policy Agent"
+      },
+      {
+        "name": "Аудит изменений с привязкой к бизнес-событиям",
+        "description": "Логирование каждого изменения метаданных, значения, пользователя и источника с поддержкой WORM-хранения и криптографического хеширования цепочки",
+        "products": "Reltio, Informatica MDM, SAP MDG, CluedIn, LedgerMDM (прототип), Pimcore"
+      },
+      {
+        "name": "Синхронизация с системами репутации и согласия",
+        "description": "Хранение предпочтений клиентов, история consent, интеграция с CMP/CDP и автоматическая блокировка обработки при отзыве",
+        "products": "Reltio, SAP MDG, Informatica MDM, CluedIn, Consent-Aware MDM (прототип)"
+      },
+      {
+        "name": "Глобальная локализация и регуляторное соответствие",
+        "description": "Поддержка региональных форматов, языков, GDPR/CCPA/ФЗ-152 профилей с автоматическим применением политик retention и anonymization",
+        "products": "SAP MDG, Reltio, Ataccama ONE, Informatica MDM, Oracle MDM, Regulatory MDM Templates (open-source)"
+      },
+      {
+        "name": "Интеграция с системами управления согласием и приватностью",
+        "description": "Автоматическая маркировка записей по consent status, блокировка обработки, генерация DSAR-ответов и audit trails",
+        "products": "Reltio, SAP MDG, Ataccama ONE, Privacy-First MDM (прототип)"
+      },
+      {
+        "name": "Динамическое управление правами на данными",
+        "description": "Временные разрешения, делегирование, revocation workflows и аудит доступа в реальном времени",
+        "products": "Oracle MDM, Ataccama ONE, Informatica MDM, Dynamic Access MDM (прототип)"
+      },
+      {
+        "name": "Интеграция с системами управления рисками и комплаенсом",
+        "description": "Автоматическая проверка записей против санкционных списков, PEP, KYC/AML баз с генерацией тикетов и блокировкой",
+        "products": "SAP MDG, Informatica MDM, Reltio, Compliance MDM Module (open-source), OpenSanctions Integration"
+      },
+      {
+        "name": "Автоматическое управление данными в соответствии с регуляторными требованиями",
+        "description": "Встроенные шаблоны GDPR, CCPA, ФЗ-152, HIPAA с автоматическим применением retention, anonymization и audit logging",
+        "products": "SAP MDG, Reltio, Ataccama ONE, Regulatory Compliance MDM (open-source)"
+      },
+      {
+        "name": "Автоматическое управление конфигурацией безопасности",
+        "description": "Централизованное управление encryption keys, certificates, RBAC/ABAC policies с ротацией, audit и compliance reporting",
+        "products": "Oracle MDM, SAP MDG, Ataccama ONE, Security Config MDM (open-source), Vault Integration"
+      },
+      {
+        "name": "Интеграция с системами управления доступом к данным",
+        "description": "Динамическое применение row/column level security, masking и tokenization на основе ролей и контекста запроса",
+        "products": "Oracle MDM, Ataccama ONE, SAP MDG, Data Access Control MDM (open-source), Ranger Integration"
+      },
+      {
+        "name": "Интеграция с системами управления данными для compliance",
+        "description": "Автоматическая проверка соответствия регуляторным требованиям, генерация отчетов, аудит изменений и поддержка DSAR",
+        "products": "SAP MDG, Reltio, Informatica MDM, Compliance Data Management (open-source)"
+      },
+      {
+        "name": "Автоматическое управление lifecycle данных",
+        "description": "Политики retention, archiving, deletion и anonymization с audit trails, compliance reporting и automated execution",
+        "products": "SAP MDG, Reltio, Informatica MDM, Data Lifecycle MDM, Open Source Lifecycle Controller"
+      }
+    ]
+  },
+  {
+    "category": "ПУБЛИКАЦИЯ, API И СОБЫТИЯ",
+    "features": [
+      {
+        "name": "Публикация через REST/GraphQL/gRPC",
+        "description": "Генерация API-эндпоинтов на основе схемы с поддержкой версионирования, rate-limiting, кэширования и асинхронных подписок",
+        "products": "Reltio, Informatica MDM, Semarchy xDM, CluedIn, Pimcore, Hop REST API (open-source), Profisee"
+      },
+      {
+        "name": "Событийно-ориентированная интеграция",
+        "description": "Эмиссия сообщений в Kafka/Pulsar при изменении мастер-записей с поддержкой схемы Avro/Protobuf и гарантии доставки",
+        "products": "Reltio, CluedIn, Ataccama ONE, IBM InfoSphere MDM, EventMDM Architecture (прототип)"
+      },
+      {
+        "name": "Поддержка событийно-ориентированного CQRS",
+        "description": "Разделение команд (запись) и запросов (чтение) с материализованными представлениями, eventual consistency и оптимизацией под чтение",
+        "products": "Reltio, EventMDM (прототип), CQRS MDM Pattern (open-source), Axon Framework Integration"
+      },
+      {
+        "name": "Поддержка транзакционной целостности",
+        "description": "ACID-совместимые операции над мастер-записями с блокировками, откатами и консистентными снимками для операционных систем",
+        "products": "SAP MDG, Oracle MDM, IBM InfoSphere MDM, Transactional MDM Reference (прототип)"
+      }
+    ]
+  },
+  {
+    "category": "ИНТЕГРАЦИЯ, МОНИТОРИНГ И НАБЛЮДАЕМОСТЬ",
+    "features": [
+      {
+        "name": "Визуализация lineage и impact analysis",
+        "description": "Отслеживание происхождения записи от источника до потребления, построение графа зависимостей и симуляция влияния изменений",
+        "products": "Informatica MDM, SAP MDG, Reltio, CluedIn, Apache Atlas + MDM Bridge (open-source), Profisee"
+      },
+      {
+        "name": "Самодиагностика и health-check платформы",
+        "description": "Мониторинг производительности матчинга, задержек синхронизации, использования ресурсов и автоматическое создание алертов",
+        "products": "Reltio, Informatica MDM, CluedIn, Ataccama ONE, Prometheus MDM Exporter (open-source)"
+      },
+      {
+        "name": "Поддержка кросс-платформенного мониторинга",
+        "description": "Экспорт метрик в Prometheus/Grafana, OpenTelemetry tracing, интеграция с SIEM и автоматическое реагирование на аномалии",
+        "products": "Reltio, Informatica MDM, CluedIn, Observability MDM Stack (open-source)"
+      },
+      {
+        "name": "Интеграция с системами управления метриками и KPI",
+        "description": "Расчет и публикация метрик качества, timeliness, completeness и accuracy с drill-down до записей и источников",
+        "products": "Reltio, SAP MDG, CluedIn, MDM Metrics Dashboard (open-source), Grafana/Prometheus Stack"
+      },
+      {
+        "name": "Автоматическое тестирование качества данных",
+        "description": "Генерация тестовых сценариев на основе профиля данных, выполнение regression checks и генерация отчетов о покрытии",
+        "products": "Ataccama ONE, Informatica MDM, Data Quality Test Framework (open-source), Great Expectations Integration"
+      },
+      {
+        "name": "Поддержка кросс-доменной аналитики",
+        "description": "Объединение мастер-данных из нескольких доменов для построения 360-представлений с поддержкой real-time aggregation",
+        "products": "Reltio, Informatica MDM, SAP MDG, Cross-Domain Analytics Layer (open-source), ClickHouse/Druid Integration"
+      },
+      {
+        "name": "Поддержка кросс-доменной аналитики в реальном времени",
+        "description": "Streaming aggregation, window functions, materialized views и поддержка complex event processing для 360-представлений",
+        "products": "Reltio, CluedIn, IBM InfoSphere MDM, Real-Time Analytics MDM (open-source)"
+      }
+    ]
+  },
+  {
+    "category": "РАСШИРЯЕМОСТЬ И ЭКОСИСТЕМА",
+    "features": [
+      {
+        "name": "Расширяемость через плагины",
+        "description": "API для загрузки пользовательских валидаторов, трансформеров, коннекторов и правил матчинга без изменения ядра",
+        "products": "TIBCO EBX, Stibo STEP, Pimcore, Semarchy xDM, Hop Plugins (open-source), AtroCore"
+      },
+      {
+        "name": "Интеграция с каталогами данных",
+        "description": "Двусторонняя синхронизация бизнес-глоссариев, тегов, lineage и ownership с OpenMetadata/DataHub/Alation через REST или SDK",
+        "products": "Ataccama ONE, Reltio, Informatica MDM, CluedIn, DataHub MDM Connector (open-source)"
+      },
+      {
+        "name": "Интеграция с системами управления метаданными предприятия",
+        "description": "Экспорт/импорт business glossary, technical metadata, data quality metrics и policy definitions через стандартные форматы",
+        "products": "SAP MDG, Informatica MDM, Ataccama ONE, TIBCO EBX, Metadata Exchange Standard (open-source)"
+      },
+      {
+        "name": "Поддержка data mesh принципов",
+        "description": "Предоставление мастер-данных как product с SLA, ownership, semantic versioning и self-service контрактами",
+        "products": "CluedIn, Reltio, Data Mesh MDM Architecture (прототип), Open Data Product Framework (open-source)"
+      },
+      {
+        "name": "Интеграция с MLOps pipeline",
+        "description": "Публикация мастер-данных как features в ML-хранилище, поддержка drift detection и автоматическая ретренировка моделей на актуальных данных",
+        "products": "Reltio, Ataccama ONE, Informatica MDM, MLOps-Ready MDM Architecture (прототип), Feast Integration"
+      },
+      {
+        "name": "Интеграция с системами управления жизненным циклом приложений",
+        "description": "Автоматическое развертывание схем, правил, пайплайнов и конфигураций через GitOps с проверкой совместимости и rollback",
+        "products": "Informatica MDM, Reltio, TIBCO EBX, GitOps MDM Pipeline (open-source), ArgoCD Integration"
+      },
+      {
+        "name": "Автоматическая генерация тестовых данных",
+        "description": "Синтез реалистичных мастер-записей с сохранением распределений, связей и compliance-требований для staging-сред",
+        "products": "Ataccama ONE, Informatica MDM, Synthetic MDM Generator (прототип), Faker-MDM Plugin (open-source)"
+      },
+      {
+        "name": "Интеграция с системами управления знаниями",
+        "description": "Привязка мастер-записей к статьям, процедурам и справочникам с семантическим поиском и рекомендациями стюардам",
+        "products": "Stibo STEP, SAP MDG, Pimcore, Knowledge-Linked MDM (прототип)"
+      },
+      {
+        "name": "Интеграция с системами управления инцидентами",
+        "description": "Автоматическое создание тикетов при нарушении качества, задержках синхронизации или аномалиях с привязкой к master record",
+        "products": "CluedIn, Reltio, SAP MDG, Incident-Aware MDM (open-source), Jira/ServiceNow Connectors"
+      },
+      {
+        "name": "Интеграция с системами управления качеством данных предприятия",
+        "description": "Централизованный сбор метрик, построение data quality scorecards, root cause analysis и рекомендации по исправлению",
+        "products": "Ataccama ONE, Informatica MDM, Talend/Qlik, Enterprise DQ Integration (open-source)"
+      },
+      {
+        "name": "Поддержка кросс-платформенной миграции",
+        "description": "Экспорт/импорт схем, правил, маппингов и конфигураций в стандартных форматах (JSON, XML, YAML) с валидацией совместимости",
+        "products": "Informatica MDM, Reltio, TIBCO EBX, Pimcore, MDM Migration Toolkit (open-source)"
+      },
+      {
+        "name": "Интеграция с системами управления данными для AI/ML",
+        "description": "Публикация feature stores, поддержка schema evolution, data drift detection и автоматическая ретренировка моделей",
+        "products": "Reltio, Ataccama ONE, Informatica MDM, AI-Ready MDM (open-source)"
+      },
+      {
+        "name": "Поддержка кросс-платформенного управления метаданными",
+        "description": "Единый репозиторий business glossary, technical metadata, data lineage и policy definitions с экспортом в стандартные форматы",
+        "products": "SAP MDG, CluedIn, Informatica MDM, Metadata Management MDM (open-source)"
+      },
+      {
+        "name": "Интеграция с системами управления данными для enterprise scale",
+        "description": "Поддержка миллионов записей, high availability, disaster recovery, horizontal scaling и performance tuning",
+        "products": "Informatica MDM, Reltio, IBM InfoSphere MDM, Enterprise Scale MDM (open-source)"
+      },
+      {
+        "name": "Интеграция с системами управления данными для global enterprises",
+        "description": "Multi-region deployment, data localization, language support, regulatory compliance и centralized governance",
+        "products": "SAP MDG, Informatica MDM, Reltio, Global Enterprise MDM (open-source)"
+      },
+      {
+        "name": "Интеграция с системами управления данными для regulated industries",
+        "description": "Встроенные шаблоны для finance, healthcare, telecom, manufacturing с compliance automation и audit readiness",
+        "products": "SAP MDG, Reltio, Informatica MDM, Regulated Industry MDM (open-source)"
+      },
+      {
+        "name": "Интеграция с системами управления данными для data-driven organizations",
+        "description": "Self-service portals, API-first architecture, ML augmentation, real-time analytics и governance-as-code",
+        "products": "Reltio, CluedIn, SAP MDG, Data-Driven Organization MDM (open-source)"
+      }
+    ]
+  },
+  {
+    "category": "СПЕЦИАЛИЗИРОВАННЫЕ И ИССЛЕДОВАТЕЛЬСКИЕ ФУНКЦИИ",
+    "features": [
+      {
+        "name": "Поддержка многоуровневого кэширования",
+        "description": "In-memory кэш для частых запросов, распределенный кэш для кластера, инвалидация по событиям и TTL-политики",
+        "products": "Reltio, SAP MDG, Oracle MDM, Caching MDM Layer (open-source), Redis/Hazelcast Integration"
+      },
+      {
+        "name": "Автоматическое выявление и исправление дрейфа схемы",
+        "description": "Мониторинг изменений в источниках, предложение маппинга, тестирование в sandbox и безопасное применение в production",
+        "products": "Reltio, CluedIn, Informatica MDM, Schema Drift Detector (open-source)"
+      },
+      {
+        "name": "Интеграция с блокчейн для неизменяемости",
+        "description": "Запись хешей мастер-транзакций в распределенный реестр с верификацией целостности без хранения PII на цепочке",
+        "products": "LedgerMDM (прототип), Blockchain MDM Research (прототип), Hyperledger Fabric MDM Adapter (open-source)"
+      },
+      {
+        "name": "Поддержка кросс-платформенного управления данными, метаданными и качеством",
+        "description": "Unified framework с extensible plugins, standard APIs, automated testing, continuous validation и policy management",
+        "products": "Informatica MDM, Ataccama ONE, CluedIn, Unified Platform MDM (open-source)"
+      },
+      {
+        "name": "Автоматическое управление конфигурацией, безопасностью, качеством и compliance",
+        "description": "Declarative policies, automated enforcement, continuous monitoring, audit trails, encryption и regulatory templates",
+        "products": "Oracle MDM, SAP MDG, Reltio, Full-Automation MDM (open-source)"
+      },
+      {
+        "name": "Интеграция с системами управления данными для future-ready architectures",
+        "description": "Support for AI/ML, data mesh, edge computing, blockchain, quantum-safe encryption и next-gen analytics",
+        "products": "Reltio, CluedIn, Future-Ready MDM Architecture (прототип)"
+      }
+    ]
+  }
+]
