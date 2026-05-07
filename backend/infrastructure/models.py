@@ -1,4 +1,4 @@
-from sqlalchemy import Column, String, Boolean, Integer, DateTime, ForeignKey, Index
+from sqlalchemy import Column, String, Boolean, Integer, DateTime, ForeignKey, Index, text
 from sqlalchemy.dialects.postgresql import UUID, JSONB
 from sqlalchemy.sql import func
 from infrastructure.database import Base
@@ -41,7 +41,7 @@ class MdmRecord(Base):
 
     __table_args__ = (
         Index("idx_entity_deleted", "entity_code", "is_deleted"),
-        Index("idx_data_gin", "data", using="gin"),
+        Index("idx_data_gin", "data", postgresql_using="gin"),
     )
 
 

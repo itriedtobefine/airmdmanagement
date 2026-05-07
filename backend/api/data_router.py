@@ -29,9 +29,13 @@ async def list_records(
     sort_by: Optional[str] = None,
     sort_order: str = Query("asc", pattern="^(asc|desc)$"),
     db: AsyncSession = Depends(get_db),
-    current_user: TokenData = Depends(check_entity_access(entity_code))
+    current_user: TokenData = Depends(get_current_user)
 ):
     """List records for entity with pagination."""
+    # Check entity access manually
+    if current_user.role != "admin" and entity_code not in current_user.allowed_entities:
+        raise HTTPException(status_code=403, detail=f"No access to entity: {entity_code}")
+    
     service = RecordService(db)
     
     filters = {}
@@ -73,11 +77,15 @@ async def create_record(
     entity_code: str,
     request: RecordCreateRequest,
     db: AsyncSession = Depends(get_db),
-    current_user: TokenData = Depends(check_entity_access(entity_code))
+    current_user: TokenData = Depends(get_current_user)
 ):
     """Create new record."""
     if current_user.role == UserRole.VIEWER:
         raise HTTPException(status_code=403, detail="Viewers cannot create records")
+    
+    # Check entity access manually
+    if current_user.role != "admin" and entity_code not in current_user.allowed_entities:
+        raise HTTPException(status_code=403, detail=f"No access to entity: {entity_code}")
     
     service = RecordService(db)
     record = await service.create_record(
@@ -100,7 +108,7 @@ async def get_record(
     entity_code: str,
     record_id: str,
     db: AsyncSession = Depends(get_db),
-    current_user: TokenData = Depends(check_entity_access(entity_code))
+    current_user: TokenData = Depends(get_current_user)
 ):
     """Get single record."""
     service = RecordService(db)
@@ -126,7 +134,7 @@ async def update_record(
     record_id: str,
     request: RecordUpdateRequest,
     db: AsyncSession = Depends(get_db),
-    current_user: TokenData = Depends(check_entity_access(entity_code))
+    current_user: TokenData = Depends(get_current_user)
 ):
     """Update existing record."""
     if current_user.role == UserRole.VIEWER:
@@ -155,7 +163,7 @@ async def delete_record(
     entity_code: str,
     record_id: str,
     db: AsyncSession = Depends(get_db),
-    current_user: TokenData = Depends(check_entity_access(entity_code))
+    current_user: TokenData = Depends(get_current_user)
 ):
     """Soft delete record."""
     if current_user.role == UserRole.VIEWER:
@@ -176,7 +184,7 @@ async def get_record_history(
     entity_code: str,
     record_id: str,
     db: AsyncSession = Depends(get_db),
-    current_user: TokenData = Depends(check_entity_access(entity_code))
+    current_user: TokenData = Depends(get_current_user)
 ):
     """Get record history."""
     service = RecordService(db)
@@ -202,7 +210,7 @@ async def restore_record(
     record_id: str,
     target_version: int = Query(..., gt=0),
     db: AsyncSession = Depends(get_db),
-    current_user: TokenData = Depends(check_entity_access(entity_code))
+    current_user: TokenData = Depends(get_current_user)
 ):
     """Restore record to specific version."""
     if current_user.role not in [UserRole.ADMIN, UserRole.DATA_STEWARD]:

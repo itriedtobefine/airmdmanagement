@@ -1,4 +1,5 @@
-from pydantic import BaseSettings, Field
+from pydantic_settings import BaseSettings
+from pydantic import Field
 from typing import List
 
 
@@ -9,10 +10,10 @@ class Settings(BaseSettings):
     DEBUG: bool = False
     
     # Database
-    POSTGRES_HOST: str = "postgres"
+    POSTGRES_HOST: str = "localhost"
     POSTGRES_PORT: int = 5432
-    POSTGRES_USER: str = "mdm_user"
-    POSTGRES_PASSWORD: str = "mdm_password"
+    POSTGRES_USER: str = "mdm_admin"
+    POSTGRES_PASSWORD: str = "mdm_secret"
     POSTGRES_DB: str = "mdm_db"
     
     @property
@@ -24,7 +25,7 @@ class Settings(BaseSettings):
         return f"postgresql+asyncpg://{self.POSTGRES_USER}:{self.POSTGRES_PASSWORD}@{self.POSTGRES_HOST}:{self.POSTGRES_PORT}/{self.POSTGRES_DB}"
     
     # Redis
-    REDIS_HOST: str = "redis"
+    REDIS_HOST: str = "localhost"
     REDIS_PORT: int = 6379
     REDIS_DB: int = 0
     
@@ -38,13 +39,12 @@ class Settings(BaseSettings):
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
     
     # CORS
-    CORS_ORIGINS: List[str] = ["http://localhost:3000", "http://localhost:5173"]
+    CORS_ORIGINS: List[str] = ["http://localhost:3000", "http://localhost:5173", "http://localhost", "*"]
     
     # Cache
     SCHEMA_CACHE_TTL: int = 900  # 15 minutes
     
-    class Config:
-        env_file = ".env"
+    model_config = {"env_file": ".env"}
 
 
 settings = Settings()
