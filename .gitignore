@@ -1,0 +1,65 @@
+```
+# Dependencies
+node_modules/
+venv/
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Build artifacts
+dist/
+build/
+target/
+
+# Environment variables
+.env
+.env.local
+.env.*
+
+# IDE specific
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Logs
+*.log
+
+# OS specific
+.DS_Store
+Thumbs.db
+
+# Python specific
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+.eggs/
+
+# Coverage reports
+.coverage
+htmlcov/
+.coverage.*
+.coverage.xml
+coverage.xml
+
+# MyPy cache
+.mypy_cache/
+.dmypy.json
+dmypy.json
+
+# Pytest cache
+.pytest_cache/
+
+# Alembic
+alembic/versions/*.py
+
+# Frontend build
+node_modules/
+dist/
+build/
+```
